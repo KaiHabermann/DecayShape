@@ -1,0 +1,109 @@
+"""
+Utility functions for hadron physics lineshapes.
+
+Contains Blatt-Weiskopf form factors and angular momentum barrier factors
+commonly used in amplitude analysis.
+"""
+
+from typing import Union, Any
+from .config import config
+
+
+def blatt_weiskopf_form_factor(q: Union[float, Any], q0: Union[float, Any], 
+                              r: float, L: int) -> Union[float, Any]:
+    """
+    Calculate the Blatt-Weiskopf form factor.
+    
+    The Blatt-Weiskopf form factor accounts for the finite size of hadrons
+    and depends on the angular momentum L of the decay.
+    
+    Args:
+        q: Momentum in the decay frame
+        q0: Reference momentum (typically at resonance mass)
+        r: Hadron radius parameter (in GeV^-1)
+        L: Angular momentum of the decay
+        
+    Returns:
+        Blatt-Weiskopf form factor
+    """
+    np = config.backend
+    
+    if L == 0:
+        return np.ones_like(q)
+    elif L == 1:
+        return np.sqrt((1 + (r * q0) ** 2) / (1 + (r * q) ** 2))
+    elif L == 2:
+        return np.sqrt((9 + 3 * (r * q0) ** 2 + (r * q0) ** 4) / 
+                      (9 + 3 * (r * q) ** 2 + (r * q) ** 4))
+    elif L == 3:
+        return np.sqrt((225 + 45 * (r * q0) ** 2 + 6 * (r * q0) ** 4 + (r * q0) ** 6) /
+                      (225 + 45 * (r * q) ** 2 + 6 * (r * q) ** 4 + (r * q) ** 6))
+    elif L == 4:
+        return np.sqrt((11025 + 1575 * (r * q0) ** 2 + 135 * (r * q0) ** 4 + 
+                       10 * (r * q0) ** 6 + (r * q0) ** 8) /
+                      (11025 + 1575 * (r * q) ** 2 + 135 * (r * q) ** 4 + 
+                       10 * (r * q) ** 6 + (r * q) ** 8))
+    else:
+        raise ValueError(f"Blatt-Weiskopf form factor not implemented for L={L}")
+
+
+def angular_momentum_barrier_factor(q: Union[float, Any], q0: Union[float, Any], 
+                                   L: int) -> Union[float, Any]:
+    """
+    Calculate the angular momentum barrier factor.
+    
+    The barrier factor accounts for the angular momentum dependence
+    of the decay amplitude.
+    
+    Args:
+        q: Momentum in the decay frame
+        q0: Reference momentum (typically at resonance mass)
+        L: Angular momentum of the decay
+        
+    Returns:
+        Angular momentum barrier factor
+    """
+    np = config.backend
+    
+    if L == 0:
+        return np.ones_like(q)
+    else:
+        return (q / q0) ** L
+
+
+def relativistic_breit_wigner_denominator(s: Union[float, Any], 
+                                        mass: float, 
+                                        width: float) -> Union[float, Any]:
+    """
+    Calculate the denominator of a relativistic Breit-Wigner.
+    
+    Args:
+        s: Mandelstam variable s (mass squared)
+        mass: Resonance mass
+        width: Resonance width
+        
+    Returns:
+        Denominator of the Breit-Wigner
+    """
+    np = config.backend
+    return s - mass**2 + 1j * mass * width
+
+
+def k_matrix_element(s: Union[float, Any], 
+                    mass: float, 
+                    width: float,
+                    coupling: float = 1.0) -> Union[float, Any]:
+    """
+    Calculate a K-matrix element.
+    
+    Args:
+        s: Mandelstam variable s (mass squared)
+        mass: Resonance mass
+        width: Resonance width
+        coupling: Coupling strength
+        
+    Returns:
+        K-matrix element
+    """
+    np = config.backend
+    return coupling * mass * width / (mass**2 - s)

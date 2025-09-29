@@ -1,0 +1,473 @@
+"""
+Advanced K-matrix implementation using poles and channels.
+
+This module provides a more sophisticated K-matrix implementation
+that uses the particle/pole/channel structure for complex multi-channel
+resonance analysis.
+"""
+
+from typing import List, Dict, Any, Union
+from pydantic import BaseModel, Field, model_validator
+from .base import Lineshape, FixedParam
+from .particles import Particle, Channel, CommonParticles
+from .config import config
+
+
+class KMatrixAdvanced(Lineshape):
+    """
+    Advanced K-matrix lineshape using poles and channels.
+    
+    This implementation allows for multiple poles and channels,
+    making it suitable for complex coupled-channel analysis.
+    """
+    
+    # Fixed parameters (channels and particles)
+    channels: FixedParam[List[Channel]] = Field(..., description="List of decay channels")
+    output_channel: FixedParam[int] = Field(
+        default=FixedParam[int](value=0),
+        description="Which channel of the F-vector to return (0-indexed)"
+    )
+    
+    # Optimization parameters (poles and couplings)
+    pole_masses: List[float] = Field(..., description="List of pole masses")
+    production_couplings: List[float] = Field(default_factory=list, description="Production couplings from initial state to each pole (length = n_poles)")
+    decay_couplings: List[float] = Field(default_factory=list, description="Decay couplings from each pole to each channel (length = n_poles × n_channels)")
+    r: float = Field(default=1.0, description="Hadron radius parameter")
+    L: int = Field(default=0, description="Angular momentum of the decay")
+    q0: float = Field(default=None, description="Reference momentum")
+    
+    class Config:
+        arbitrary_types_allowed = True
+    
+    @model_validator(mode='after')
+    def validate_and_fill_couplings(self):
+        """Validate coupling lengths and fill with defaults if empty."""
+        n_poles = len(self.pole_masses)
+        n_channels = len(self.channels.value)
+        
+        # Validate output_channel
+        if self.output_channel.value < 0 or self.output_channel.value >= n_channels:
+            raise ValueError(f"output_channel must be between 0 and {n_channels-1}, got {self.output_channel.value}")
+        
+        # Fill production couplings with defaults if empty
+        if not self.production_couplings:
+            self.production_couplings = [1.0] * n_poles
+        elif len(self.production_couplings) != n_poles:
+            raise ValueError(f"production_couplings must have length {n_poles}, got {len(self.production_couplings)}")
+        
+        # Fill decay couplings with defaults if empty
+        if not self.decay_couplings:
+            self.decay_couplings = [1.0] * (n_poles * n_channels)
+        elif len(self.decay_couplings) != n_poles * n_channels:
+            raise ValueError(f"decay_couplings must have length {n_poles * n_channels}, got {len(self.decay_couplings)}")
+        
+        return self
+    
+    @property
+    def parameter_order(self) -> List[str]:
+        """Return the order of parameters for positional arguments."""
+        n_poles = len(self.pole_masses)
+        n_channels = len(self.channels.value)
+        
+        # Build flat parameter order
+        params = []
+        
+        # Add pole masses
+        for i in range(n_poles):
+            params.append(f"pole_mass_{i}")
+        
+        # Add production couplings
+        for i in range(n_poles):
+            params.append(f"production_coupling_{i}")
+        
+        # Add decay couplings (pole_index * n_channels + channel_index)
+        for pole_idx in range(n_poles):
+            for channel_idx in range(n_channels):
+                params.append(f"decay_coupling_{pole_idx}_{channel_idx}")
+        
+        # Add other parameters
+        params.extend(["r", "L", "q0"])
+        
+        return params
+    
+    def model_post_init(self, __context):
+        """Post-initialization to set q0 if not provided."""
+        if self.q0 is None:
+            # Use the first pole mass as reference
+            if self.pole_masses:
+                self.q0 = self.pole_masses[0] / 2.0
+            else:
+                self.q0 = 0.5
+    
+    def _get_parameters(self, *args, **kwargs) -> Dict[str, Any]:
+        """
+        Get parameters with overrides, handling flat parameter structure.
+        """
+        # Start with optimization parameters
+        params = self.get_optimization_parameters().copy()
+        
+        # Convert flat parameters back to lists for internal use
+        n_poles = len(self.pole_masses)
+        n_channels = len(self.channels.value)
+        
+        # Handle pole masses
+        pole_masses = []
+        for i in range(n_poles):
+            param_name = f"pole_mass_{i}"
+            if param_name in kwargs:
+                pole_masses.append(kwargs[param_name])
+            else:
+                pole_masses.append(self.pole_masses[i])
+        params["pole_masses"] = pole_masses
+        
+        # Handle production couplings
+        production_couplings = []
+        for i in range(n_poles):
+            param_name = f"production_coupling_{i}"
+            if param_name in kwargs:
+                production_couplings.append(kwargs[param_name])
+            else:
+                production_couplings.append(self.production_couplings[i])
+        params["production_couplings"] = production_couplings
+        
+        # Handle decay couplings
+        decay_couplings = []
+        for pole_idx in range(n_poles):
+            for channel_idx in range(n_channels):
+                param_name = f"decay_coupling_{pole_idx}_{channel_idx}"
+                flat_idx = pole_idx * n_channels + channel_idx
+                if param_name in kwargs:
+                    decay_couplings.append(kwargs[param_name])
+                else:
+                    decay_couplings.append(self.decay_couplings[flat_idx])
+        params["decay_couplings"] = decay_couplings
+        
+        # Handle other parameters
+        for param_name in ["r", "L", "q0"]:
+            if param_name in kwargs:
+                params[param_name] = kwargs[param_name]
+        
+        return params
+    
+    def __call__(self, *args, **kwargs) -> Union[float, Any]:
+        """
+        Evaluate the advanced K-matrix lineshape.
+        
+        Implements the K-matrix formalism as described in AmpForm documentation:
+        1. Build full T-matrix for all channels
+        2. Build P-vector from production couplings
+        3. Build F-vector from T-matrix and P-vector
+        4. Return first entry of F-vector
+        """
+        # Get parameters with overrides
+        params = self._get_parameters(*args, **kwargs)
+        
+        np = config.backend
+        s = self.s.value
+        n_poles = len(params["pole_masses"])
+        n_channels = len(self.channels.value)
+        
+        # Step 1: Build the full T-matrix
+        T_matrix = self._build_t_matrix(params, s, n_poles, n_channels)
+        
+        # Step 2: Build the P-vector
+        P_vector = self._build_p_vector(params, s, n_poles, n_channels)
+        
+        # Step 3: Build the F-vector
+        F_vector = self._build_f_vector(T_matrix, P_vector, s, n_channels)
+        
+        # Step 4: Return the specified channel of the F-vector
+        output_idx = self.output_channel.value
+        if n_channels == 1:
+            # Single channel: F_vector is already 1D
+            return F_vector
+        else:
+            # Multi-channel: F_vector is 2D, return specified channel
+            return F_vector[output_idx, :]
+    
+    def _build_t_matrix(self, params: Dict[str, Any], s: Union[float, Any], 
+                       n_poles: int, n_channels: int) -> Union[float, Any]:
+        """
+        Build the full T-matrix for all channels.
+        
+        T = K * (I - i*K*rho)^(-1)
+        where K is the K-matrix and rho is the phase space factor.
+        """
+        np = config.backend
+        
+        # Calculate phase space factors for each channel
+        rho = np.zeros((n_channels, len(s)), dtype=complex)
+        for i, channel in enumerate(self.channels.value):
+            rho[i] = channel.phase_space_factor(s)
+        
+        # Build K-matrix: K_ij = sum_R (g_Ri * g_Rj) / (m_R^2 - s)
+        K = np.zeros((n_channels, n_channels, len(s)), dtype=complex)
+        for R in range(n_poles):
+            m_R = params["pole_masses"][R]
+            denominator = m_R**2 - s
+            
+            # Handle the case where s equals a pole mass (add small epsilon)
+            epsilon = 1e-10
+            denominator = np.where(np.abs(denominator) < epsilon, epsilon, denominator)
+            
+            # Get decay couplings for this pole
+            g_R = np.zeros(n_channels, dtype=complex)
+            for i in range(n_channels):
+                flat_idx = R * n_channels + i
+                g_R[i] = params["decay_couplings"][flat_idx]
+            
+            # Add contribution to K-matrix for each s value
+            for i in range(n_channels):
+                for j in range(n_channels):
+                    K[i, j] += g_R[i] * g_R[j] / denominator
+        
+        # Calculate T-matrix: T = K * (I - i*K*rho)^(-1)
+        if n_channels == 1:
+            # Single channel: T = K / (1 - i*K*rho)
+            T_matrix = K[0, 0] / (1 - 1j * K[0, 0] * rho[0])
+        else:
+            # Multi-channel case: T = K * (I - i*K*rho)^(-1)
+            # Vectorized calculation for all s values at once
+            T_matrix = np.zeros((n_channels, n_channels, len(s)), dtype=complex)
+            
+            for s_idx in range(len(s)):
+                K_s = K[:, :, s_idx]
+                rho_s = rho[:, s_idx]
+                
+                I = np.eye(n_channels)
+                rho_diag = np.diag(rho_s)
+                denominator_matrix = I - 1j * K_s @ rho_diag
+                
+                # Check if the matrix is invertible
+                det = np.linalg.det(denominator_matrix)
+                if np.abs(det) < 1e-12:
+                    # If determinant is too small, use pseudo-inverse
+                    T_matrix[:, :, s_idx] = K_s @ np.linalg.pinv(denominator_matrix)
+                else:
+                    T_matrix[:, :, s_idx] = K_s @ np.linalg.inv(denominator_matrix)
+        
+        return T_matrix
+    
+    def _build_p_vector(self, params: Dict[str, Any], s: Union[float, Any], 
+                       n_poles: int, n_channels: int) -> Union[float, Any]:
+        """
+        Build the P-vector from production couplings.
+        
+        P_i = sum_R (beta_R * g_Ri) / (m_R^2 - s)
+        where beta_R are the production couplings and g_Ri are the decay couplings.
+        """
+        np = config.backend
+        
+        # Initialize P-vector
+        P_vector = np.zeros((n_channels, len(s)), dtype=complex)
+        
+        for R in range(n_poles):
+            m_R = params["pole_masses"][R]
+            beta_R = params["production_couplings"][R]
+            denominator = -m_R**2 + s
+            
+            # Handle the case where s equals a pole mass (add small epsilon)
+            epsilon = 1e-10
+            denominator = np.where(np.abs(denominator) < epsilon, epsilon, denominator)
+            
+            # Get decay couplings for this pole
+            g_R = np.zeros(n_channels, dtype=complex)
+            for i in range(n_channels):
+                flat_idx = R * n_channels + i
+                g_R[i] = params["decay_couplings"][flat_idx]
+            
+            # Vectorized contribution to P-vector for all channels and s values
+            # P_vector[i, :] += beta_R * g_R[i] / denominator
+            for i in range(n_channels):
+                P_vector[i] += beta_R * g_R[i] / denominator
+        
+        return P_vector
+    
+    def _build_f_vector(self, T_matrix: Union[float, Any], P_vector: Union[float, Any], 
+                       s: Union[float, Any], n_channels: int) -> Union[float, Any]:
+        """
+        Build the F-vector from T-matrix and P-vector.
+        
+        F = (I - i*T*rho)^(-1) * P
+        where T is the T-matrix, rho is the phase space factor, and P is the P-vector.
+        """
+        np = config.backend
+        
+        # Calculate phase space factors for each channel
+        rho = np.zeros((n_channels, len(s)), dtype=complex)
+        for i, channel in enumerate(self.channels.value):
+            rho[i] = channel.phase_space_factor(s)
+        
+        # Build F-vector: F = (I - i*T*rho)^(-1) * P
+        if n_channels == 1:
+            # Single channel: F = P / (1 - i*T*rho)
+            F_vector = P_vector[0] / (1 - 1j * T_matrix * rho[0])
+        else:
+            # Multi-channel case: F = (I - i*T*rho)^(-1) * P
+            F_vector = np.zeros((n_channels, len(s)), dtype=complex)
+            
+            for s_idx in range(len(s)):
+                T_s = T_matrix[:, :, s_idx]
+                P_s = P_vector[:, s_idx]
+                rho_s = rho[:, s_idx]
+                
+                I = np.eye(n_channels)
+                rho_diag = np.diag(rho_s)
+                denominator_matrix = I - 1j * T_s @ rho_diag
+                
+                # Check if the matrix is invertible
+                det = np.linalg.det(denominator_matrix)
+                if np.abs(det) < 1e-12:
+                    # If determinant is too small, use pseudo-inverse
+                    F_vector[:, s_idx] = np.linalg.pinv(denominator_matrix) @ P_s
+                else:
+                    F_vector[:, s_idx] = np.linalg.inv(denominator_matrix) @ P_s
+        
+        return F_vector
+    
+    def get_channel_info(self) -> Dict[str, Any]:
+        """Get information about all channels."""
+        info = {}
+        for i, channel in enumerate(self.channels.value):
+            info[f"channel_{i}"] = {
+                "particles": [channel.particle1.value, channel.particle2.value],
+                "threshold": channel.threshold,
+                "total_mass": channel.total_mass
+            }
+        return info
+    
+    def get_pole_info(self) -> Dict[str, Any]:
+        """Get information about all poles."""
+        info = {}
+        n_channels = len(self.channels.value)
+        for i, pole_mass in enumerate(self.pole_masses):
+            info[f"pole_{i}"] = {
+                "mass": pole_mass,
+                "production_coupling": self.production_couplings[i],
+                "decay_couplings": self.decay_couplings[i*n_channels:(i+1)*n_channels]
+            }
+        return info
+
+
+def create_simple_kmatrix(s_values: Union[float, Any], 
+                         pole_mass: float = 0.775,
+                         channel1_particle1: Particle = None,
+                         channel1_particle2: Particle = None,
+                         output_channel: int = 0,
+                         **kwargs) -> KMatrixAdvanced:
+    """
+    Create a simple K-matrix with one pole and one channel.
+    
+    Args:
+        s_values: Mandelstam variable s values
+        pole_mass: Pole mass of the resonance
+        channel1_particle1: First particle in the channel (default: π⁺)
+        channel1_particle2: Second particle in the channel (default: π⁻)
+        output_channel: Which channel to return (default: 0)
+        **kwargs: Additional parameters for the K-matrix
+    
+    Returns:
+        KMatrixAdvanced instance
+    """
+    # Default particles
+    if channel1_particle1 is None:
+        channel1_particle1 = CommonParticles.PI_PLUS
+    if channel1_particle2 is None:
+        channel1_particle2 = CommonParticles.PI_MINUS
+    
+    # Create channel
+    channel = Channel(
+        particle1=FixedParam(channel1_particle1),
+        particle2=FixedParam(channel1_particle2)
+    )
+    
+    # Create K-matrix
+    return KMatrixAdvanced(
+        s=FixedParam(s_values),
+        channels=FixedParam([channel]),
+        pole_masses=[pole_mass],
+        production_couplings=[1.0],  # Single production coupling
+        decay_couplings=[1.0],  # Single decay coupling
+        output_channel=FixedParam(output_channel),
+        **kwargs
+    )
+
+
+def create_pipi_kmatrix(s_values: Union[float, Any],
+                       pole_mass: float = 0.775,
+                       width: float = 0.15,
+                       output_channel: int = 0,
+                       **kwargs) -> KMatrixAdvanced:
+    """
+    Create a K-matrix for ππ scattering.
+    
+    Args:
+        s_values: Mandelstam variable s values
+        pole_mass: Pole mass of the resonance
+        width: Resonance width
+        output_channel: Which channel to return (default: 0)
+        **kwargs: Additional parameters for the K-matrix
+    
+    Returns:
+        KMatrixAdvanced instance
+    """
+    # Create π⁺π⁻ channel
+    channel = Channel(
+        particle1=FixedParam(CommonParticles.PI_PLUS),
+        particle2=FixedParam(CommonParticles.PI_MINUS)
+    )
+    
+    # Create K-matrix
+    return KMatrixAdvanced(
+        s=FixedParam(s_values),
+        channels=FixedParam([channel]),
+        pole_masses=[pole_mass],
+        production_couplings=[width],  # Use width as production coupling
+        decay_couplings=[width],  # Use width as decay coupling
+        output_channel=FixedParam(output_channel),
+        **kwargs
+    )
+
+
+def create_multi_channel_kmatrix(s_values: Union[float, Any],
+                                pole_mass: float = 0.98,
+                                channels: List[Channel] = None,
+                                output_channel: int = 0,
+                                **kwargs) -> KMatrixAdvanced:
+    """
+    Create a K-matrix with multiple channels.
+    
+    Args:
+        s_values: Mandelstam variable s values
+        pole_mass: Pole mass of the resonance
+        channels: List of channels (default: ππ and KK)
+        output_channel: Which channel to return (default: 0)
+        **kwargs: Additional parameters for the K-matrix
+    
+    Returns:
+        KMatrixAdvanced instance
+    """
+    # Default channels: ππ and KK
+    if channels is None:
+        channels = [
+            Channel(
+                particle1=FixedParam(CommonParticles.PI_PLUS),
+                particle2=FixedParam(CommonParticles.PI_MINUS)
+            ),
+            Channel(
+                particle1=FixedParam(CommonParticles.K_PLUS),
+                particle2=FixedParam(CommonParticles.K_MINUS)
+            )
+        ]
+    
+    # Create K-matrix
+    n_channels = len(channels)
+    return KMatrixAdvanced(
+        s=FixedParam(s_values),
+        channels=FixedParam(channels),
+        pole_masses=[pole_mass],
+        production_couplings=[0.1],  # Single production coupling
+        decay_couplings=[0.1, 0.05],  # Different decay couplings for each channel
+        output_channel=FixedParam(output_channel),
+        **kwargs
+    )
