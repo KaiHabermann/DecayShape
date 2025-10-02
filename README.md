@@ -61,31 +61,52 @@ bw = ds.RelativisticBreitWigner(
 ### Flatté
 ```python
 flatte = ds.Flatte(
-    s=s_values,                     # Mandelstam variable s (automatically wrapped as FixedParam)
-    pole_mass=0.98,                # Pole mass (optimization parameter)
-    # Channel masses are automatically set as FixedParam[float] with defaults
-    # channel1_mass1=0.14,         # π mass (fixed parameter)
-    # channel1_mass2=0.14,         # π mass (fixed parameter)
-    # channel2_mass1=0.49,         # K mass (fixed parameter)
-    # channel2_mass2=0.49,         # K mass (fixed parameter)
-    width1=0.1,                    # Width for first channel (optimization parameter)
-    width2=0.05,                   # Width for second channel (optimization parameter)
-    L1=0, L2=0                    # Angular momenta (optimization parameters)
+    s=s_values,                     # Mandelstam variable s (auto-wrapped)
+    pole_mass=0.98,                 # Pole mass
+    # Channel masses (auto-wrapped as FixedParam[float])
+    channel1_mass1=0.139,           # π mass
+    channel1_mass2=0.139,           # π mass
+    channel2_mass1=0.494,           # K mass
+    channel2_mass2=0.494,           # K mass
+    # Width and dynamics per channel
+    width1=0.1,
+    width2=0.05,
+    r1=1.0,
+    r2=1.0,
+    L1=0,
+    L2=0
+    # q01 and q02 are optional; if omitted they default to pole_mass/2
 )
 ```
 
-### K-matrix
+### K-matrix (advanced)
 ```python
-kmat = ds.KMatrix(
-    s=s_values,                     # Mandelstam variable s (automatically wrapped as FixedParam)
-    pole_mass=0.775,               # Pole mass (optimization parameter)
-    # Channel masses are automatically set as FixedParam[float] with defaults
-    # channel_mass1=0.14,          # π mass (fixed parameter)
-    # channel_mass2=0.14,          # π mass (fixed parameter)
-    width=0.15,                    # Width (optimization parameter)
-    coupling=1.0,                  # Coupling strength (optimization parameter)
-    L=0                           # Angular momentum (optimization parameter)
+from decayshape import Channel, CommonParticles
+
+# Define channels (auto-wrapped FixedParam for particles)
+pipi = Channel(
+    particle1=CommonParticles.PI_PLUS,
+    particle2=CommonParticles.PI_MINUS,
 )
+kk = Channel(
+    particle1=CommonParticles.K_PLUS,
+    particle2=CommonParticles.K_MINUS,
+)
+
+kmat = ds.KMatrixAdvanced(
+    s=s_values,                     # Mandelstam variable s (auto-wrapped)
+    channels=[pipi, kk],            # List[Channel]
+    pole_masses=[0.775, 0.98],      # List of pole masses (n_poles)
+    production_couplings=[1.0, 0.8],# length = n_poles
+    # decay_couplings: length = n_poles * n_channels (row-major)
+    decay_couplings=[1.0, 0.5, 0.3, 0.7],
+    output_channel=0,               # which channel amplitude to return
+    r=1.0,
+    L=0
+)
+
+# Evaluate
+ampl = kmat()
 ```
 
 ## Backend Configuration
