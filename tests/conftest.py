@@ -11,7 +11,7 @@ from decayshape.particles import CommonParticles
 @pytest.fixture
 def sample_s_values():
     """Sample s values for testing lineshapes."""
-    return np.linspace(0.1, 2.0, 50)
+    return np.linspace(0.1, 2.0, 100)
 
 
 @pytest.fixture

@@ -19,9 +19,6 @@ from .particles import (
 )
 from .kmatrix_advanced import (
     KMatrixAdvanced,
-    create_simple_kmatrix,
-    create_pipi_kmatrix,
-    create_multi_channel_kmatrix,
 )
 from .utils import (
     blatt_weiskopf_form_factor,
@@ -39,9 +36,6 @@ __all__ = [
     "Channel",
     "CommonParticles",
     "KMatrixAdvanced",
-    "create_simple_kmatrix",
-    "create_pipi_kmatrix",
-    "create_multi_channel_kmatrix",
     "blatt_weiskopf_form_factor",
     "angular_momentum_barrier_factor",
 ]

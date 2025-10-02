@@ -23,7 +23,10 @@ class FixedParam(BaseModel, Generic[T]):
         return self.value[item]
     
     def __getattr__(self, name: str):
-        """Forward all attribute access to the value."""
+        """First look for the attribute in the instance, then forward to value."""
+        # Check if the attribute exists in the instance's __dict__ or as a property
+        if name in self.__dict__ or hasattr(type(self), name):
+            return object.__getattribute__(self, name)
         if name.startswith('_') or name in ('value', 'model_fields', 'model_config'):
             # Don't forward private attributes or Pydantic internals
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
@@ -33,6 +36,22 @@ class LineshapeBase(BaseModel):
     """Base Pydantic model for all lineshapes."""
     s: FixedParam[Union[float, Any]] = Field(..., description="Mandelstam variable s (mass squared) or array of s values")
     
+    @field_validator('s', mode='before')
+    @classmethod
+    def ensure_s_is_array(cls, v):
+        # If v is already a FixedParam, extract its value for checking
+        value = v.value if isinstance(v, FixedParam) else v
+        # Check if value is an iterable (but not a string or bytes)
+        if hasattr(value, '__iter__') and not isinstance(value, (str, bytes)):
+            # Convert to backend array
+            arr = config.backend.array(value)
+            # If v is a FixedParam, return a new FixedParam with arr
+            if isinstance(v, FixedParam):
+                return FixedParam(value=arr)
+            else:
+                return arr
+        return v
+
     class Config:
         arbitrary_types_allowed = True
     
@@ -56,6 +75,8 @@ class LineshapeBase(BaseModel):
                     
                     # If the value is not already a FixedParam, wrap it
                     if not isinstance(value, FixedParam):
+                        if isinstance(value, dict) and 'value' in value:
+                            value = value['value']
                         values[field_name] = FixedParam(value=value)
         
         return values

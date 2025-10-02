@@ -7,9 +7,6 @@ import numpy as np
 from decayshape import FixedParam
 from decayshape.kmatrix_advanced import (
     KMatrixAdvanced,
-    create_simple_kmatrix,
-    create_pipi_kmatrix,
-    create_multi_channel_kmatrix
 )
 from decayshape.particles import CommonParticles, Channel
 
@@ -201,7 +198,7 @@ class TestKMatrixAdvanced:
         result_default = kmat()
         
         # Override pole masses
-        result_override = kmat(pole_masses=[0.8])
+        result_override = kmat(pole_mass_0=0.8)
         
         # Results should be different
         assert not np.allclose(result_default, result_override)
@@ -230,51 +227,6 @@ class TestKMatrixAdvanced:
         )
         
         # Should work without errors
-        result = kmat()
-        assert isinstance(result, np.ndarray)
-        assert result.shape == sample_s_values.shape
-
-
-class TestKMatrixHelperFunctions:
-    """Test K-matrix helper functions."""
-    
-    def test_create_simple_kmatrix(self, sample_s_values):
-        """Test create_simple_kmatrix helper."""
-        kmat = create_simple_kmatrix(
-            s_values=sample_s_values,
-            pole_mass=0.775,
-            coupling=1.0
-        )
-        
-        assert isinstance(kmat, KMatrixAdvanced)
-        result = kmat()
-        assert isinstance(result, np.ndarray)
-        assert result.shape == sample_s_values.shape
-    
-    def test_create_pipi_kmatrix(self, sample_s_values):
-        """Test create_pipi_kmatrix helper."""
-        kmat = create_pipi_kmatrix(
-            s_values=sample_s_values,
-            pole_masses=[0.6, 0.8],
-            couplings=[1.0, 0.8]
-        )
-        
-        assert isinstance(kmat, KMatrixAdvanced)
-        result = kmat()
-        assert isinstance(result, np.ndarray)
-        assert result.shape == sample_s_values.shape
-    
-    def test_create_multi_channel_kmatrix(self, sample_s_values):
-        """Test create_multi_channel_kmatrix helper."""
-        kmat = create_multi_channel_kmatrix(
-            s_values=sample_s_values,
-            pole_masses=[0.6, 1.0],
-            production_couplings=[1.0, 0.8],
-            decay_couplings=[[1.0, 0.5], [0.3, 0.7]],  # 2 poles × 2 channels
-            output_channel=0
-        )
-        
-        assert isinstance(kmat, KMatrixAdvanced)
         result = kmat()
         assert isinstance(result, np.ndarray)
         assert result.shape == sample_s_values.shape

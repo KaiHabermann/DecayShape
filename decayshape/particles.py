@@ -71,10 +71,12 @@ class Channel(BaseModel):
                     
                     # If the value is not already a FixedParam, wrap it
                     if not isinstance(value, FixedParam):
+                        if isinstance(value, dict) and 'value' in value:
+                            value = value['value']
                         values[field_name] = FixedParam(value=value)
         
         return values
-    
+
     @property
     def total_mass(self) -> float:
         """Total mass of the two particles."""
