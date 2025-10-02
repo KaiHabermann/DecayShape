@@ -43,11 +43,11 @@ jobs:
           PY
           echo "version=$(cat version.txt)" >> $GITHUB_OUTPUT
 
-      # - name: Publish to PyPI
-      #   uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     packages-dir: dist/
-      #     verbose: true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          verbose: true
 
       # Uncomment the following step to publish to TestPyPI instead
       - name: Publish to TestPyPI
