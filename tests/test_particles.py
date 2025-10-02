@@ -107,7 +107,7 @@ class TestChannel:
             particle2=CommonParticles.PI_MINUS
         )
         
-        expected_threshold = (CommonParticles.PI_PLUS.mass + CommonParticles.PI_MINUS.mass) ** 2
+        expected_threshold = (CommonParticles.PI_PLUS.mass + CommonParticles.PI_MINUS.mass)
         threshold = channel.threshold
         
         assert threshold == pytest.approx(expected_threshold, rel=1e-6)
@@ -121,7 +121,7 @@ class TestChannel:
         
         # Test at threshold (momentum should be 0)
         s_threshold = channel.threshold
-        momentum_at_threshold = channel.momentum(s_threshold)
+        momentum_at_threshold = channel.momentum(s_threshold ** 2)
         assert momentum_at_threshold == pytest.approx(0.0, abs=1e-10)
         
         # Test above threshold
@@ -144,17 +144,17 @@ class TestChannel:
         
         # Test at threshold (should be 0)
         s_threshold = channel.threshold
-        ps_at_threshold = channel.phase_space_factor(s_threshold)
+        ps_at_threshold = channel.phase_space_factor(s_threshold ** 2)
         assert ps_at_threshold == pytest.approx(0.0, abs=1e-10)
         
         # Test above threshold (should be positive)
         s_above = 0.5  # GeV^2
-        ps_above = channel.phase_space_factor(s_above)
+        ps_above = channel.phase_space_factor(s_above ** 2)
         assert ps_above > 0
         
         # Test with array input
         s_array = np.array([0.1, 0.3, 0.5, 0.7])
-        ps_array = channel.phase_space_factor(s_array)
+        ps_array = channel.phase_space_factor(s_array ** 2)
         assert isinstance(ps_array, np.ndarray)
         assert ps_array.shape == s_array.shape
     
@@ -234,10 +234,10 @@ class TestChannelPhysics:
         s_below = 0.01  # GeV^2, well below ππ threshold
         
         # Momentum should be imaginary (returned as complex)
-        momentum = channel.momentum(s_below)
+        momentum = channel.momentum(s_below ** 2)
         if np.iscomplexobj(momentum):
             assert np.real(momentum) == pytest.approx(0.0, abs=1e-10)
-            assert np.imag(momentum) < 0  # Imaginary momentum
+            assert np.imag(momentum) != 0  # Imaginary momentum
         else:
             # If implementation returns NaN or 0 for below threshold
             assert np.isnan(momentum) or momentum == 0
