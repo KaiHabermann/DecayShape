@@ -66,7 +66,7 @@ flatte = ds.Flatte(
     pole_mass=0.98,                # Pole mass (optimization parameter)
     # Channel masses are automatically set as FixedParam[float] with defaults
     # channel1_mass1=0.14,         # π mass (fixed parameter)
-    # channel1_mass2=0.14,         # π mass (fixed parameter)  
+    # channel1_mass2=0.14,         # π mass (fixed parameter)
     # channel2_mass1=0.49,         # K mass (fixed parameter)
     # channel2_mass2=0.49,         # K mass (fixed parameter)
     width1=0.1,                    # Width for first channel (optimization parameter)

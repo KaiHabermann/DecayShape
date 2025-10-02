@@ -2,8 +2,9 @@
 Pytest configuration and fixtures for DecayShape tests.
 """
 
-import pytest
 import numpy as np
+import pytest
+
 from decayshape import FixedParam
 from decayshape.particles import CommonParticles
 
@@ -49,19 +50,10 @@ def sample_fixed_param_particle(sample_particle):
 @pytest.fixture
 def rho_parameters():
     """Standard rho(770) meson parameters."""
-    return {
-        'pole_mass': 0.775,
-        'width': 0.15,
-        'r': 1.0,
-        'L': 1
-    }
+    return {"pole_mass": 0.775, "width": 0.15, "r": 1.0, "L": 1}
 
 
 @pytest.fixture
 def f0_980_parameters():
     """Standard f0(980) meson parameters for Flatte."""
-    return {
-        'mass': 0.98,
-        'g_pipi': 0.2,
-        'g_kk': 0.8
-    }
+    return {"mass": 0.98, "g_pipi": 0.2, "g_kk": 0.8}

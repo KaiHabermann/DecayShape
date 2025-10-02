@@ -6,32 +6,34 @@ the structure and parameters of all available lineshapes.
 """
 
 import json
+from typing import Any, Optional
+
 import numpy as np
-from typing import Dict, Any, List, Optional
-from .lineshapes import RelativisticBreitWigner, Flatte
+
 from .kmatrix_advanced import KMatrixAdvanced
+from .lineshapes import Flatte, RelativisticBreitWigner
 from .particles import Channel, CommonParticles
 
 
-def get_all_lineshape_schemas() -> Dict[str, Dict[str, Any]]:
+def get_all_lineshape_schemas() -> dict[str, dict[str, Any]]:
     """
     Generate JSON schemas for all available lineshape types.
-    
+
     Returns:
         Dictionary mapping lineshape names to their JSON schemas
     """
     schemas = {}
-    
+
     # Dummy s values (will be ignored in schemas)
     s_vals = np.array([0.5, 0.6, 0.7])
-    
+
     # RelativisticBreitWigner
     try:
         bw = RelativisticBreitWigner(s=s_vals, pole_mass=0.775, width=0.15)
         schemas["RelativisticBreitWigner"] = bw.to_json_schema()
     except Exception as e:
         schemas["RelativisticBreitWigner"] = {"error": str(e)}
-    
+
     # Flatte
     try:
         flatte = Flatte(
@@ -46,61 +48,55 @@ def get_all_lineshape_schemas() -> Dict[str, Dict[str, Any]]:
             r1=1.0,
             r2=1.0,
             L1=0,
-            L2=0
+            L2=0,
         )
         schemas["Flatte"] = flatte.to_json_schema()
     except Exception as e:
         schemas["Flatte"] = {"error": str(e)}
-    
+
     # KMatrixAdvanced
     try:
         # Create sample channels
-        pipi_channel = Channel(
-            particle1=CommonParticles.PI_PLUS,
-            particle2=CommonParticles.PI_MINUS
-        )
-        kk_channel = Channel(
-            particle1=CommonParticles.K_PLUS,
-            particle2=CommonParticles.K_MINUS
-        )
-        
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+
         kmat = KMatrixAdvanced(
             s=s_vals,
             channels=[pipi_channel, kk_channel],
             pole_masses=[0.775, 0.98],
             production_couplings=[1.0, 0.8],
             decay_couplings=[1.0, 0.5, 0.3, 0.7],
-            output_channel=0
+            output_channel=0,
         )
         schemas["KMatrixAdvanced"] = kmat.to_json_schema()
     except Exception as e:
         schemas["KMatrixAdvanced"] = {"error": str(e)}
-    
+
     return schemas
 
 
-def get_lineshape_schema(lineshape_name: str, **kwargs) -> Dict[str, Any]:
+def get_lineshape_schema(lineshape_name: str, **kwargs) -> dict[str, Any]:
     """
     Generate JSON schema for a specific lineshape type.
-    
+
     Args:
         lineshape_name: Name of the lineshape class
         **kwargs: Additional parameters for lineshape construction
-        
+
     Returns:
         JSON schema dictionary for the specified lineshape
-        
+
     Raises:
         ValueError: If lineshape_name is not recognized
     """
     # Dummy s values (will be ignored in schema)
     s_vals = np.array([0.5, 0.6, 0.7])
-    
+
     if lineshape_name == "RelativisticBreitWigner":
         defaults = {"pole_mass": 0.775, "width": 0.15}
         defaults.update(kwargs)
         lineshape = RelativisticBreitWigner(s=s_vals, **defaults)
-        
+
     elif lineshape_name == "Flatte":
         defaults = {
             "pole_mass": 0.98,
@@ -113,43 +109,37 @@ def get_lineshape_schema(lineshape_name: str, **kwargs) -> Dict[str, Any]:
             "r1": 1.0,
             "r2": 1.0,
             "L1": 0,
-            "L2": 0
+            "L2": 0,
         }
         defaults.update(kwargs)
         lineshape = Flatte(s=s_vals, **defaults)
-        
+
     elif lineshape_name == "KMatrixAdvanced":
         # Create default channels if not provided
-        if 'channels' not in kwargs:
-            pipi_channel = Channel(
-                particle1=CommonParticles.PI_PLUS,
-                particle2=CommonParticles.PI_MINUS
-            )
-            kk_channel = Channel(
-                particle1=CommonParticles.K_PLUS,
-                particle2=CommonParticles.K_MINUS
-            )
-            kwargs['channels'] = [pipi_channel, kk_channel]
-        
+        if "channels" not in kwargs:
+            pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+            kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+            kwargs["channels"] = [pipi_channel, kk_channel]
+
         defaults = {
             "pole_masses": [0.775, 0.98],
             "production_couplings": [1.0, 0.8],
             "decay_couplings": [1.0, 0.5, 0.3, 0.7],
-            "output_channel": 0
+            "output_channel": 0,
         }
         defaults.update(kwargs)
         lineshape = KMatrixAdvanced(s=s_vals, **defaults)
-        
+
     else:
         raise ValueError(f"Unknown lineshape type: {lineshape_name}")
-    
+
     return lineshape.to_json_schema()
 
 
-def get_available_lineshapes() -> List[str]:
+def get_available_lineshapes() -> list[str]:
     """
     Get list of all available lineshape types.
-    
+
     Returns:
         List of lineshape class names
     """
@@ -159,26 +149,26 @@ def get_available_lineshapes() -> List[str]:
 def export_schemas_to_file(filename: str, indent: Optional[int] = 2) -> None:
     """
     Export all lineshape schemas to a JSON file.
-    
+
     Args:
         filename: Output filename
         indent: JSON indentation (None for compact)
     """
     schemas = get_all_lineshape_schemas()
-    
-    with open(filename, 'w', encoding='utf-8') as f:
+
+    with open(filename, "w", encoding="utf-8") as f:
         json.dump(schemas, f, indent=indent, ensure_ascii=False)
 
 
-def get_common_particles_info() -> Dict[str, Any]:
+def get_common_particles_info() -> dict[str, Any]:
     """
     Get information about common particles for frontend use.
-    
+
     Returns:
         Dictionary with particle information
     """
     particles_info = {}
-    
+
     # Get all common particles
     common_particles = [
         ("PI_PLUS", CommonParticles.PI_PLUS),
@@ -188,7 +178,7 @@ def get_common_particles_info() -> Dict[str, Any]:
         ("PROTON", CommonParticles.PROTON),
         ("NEUTRON", CommonParticles.NEUTRON),
     ]
-    
+
     for name, particle in common_particles:
         particles_info[name] = {
             "name": name,  # Use the constant name as the particle name
@@ -197,5 +187,5 @@ def get_common_particles_info() -> Dict[str, Any]:
             "parity": particle.parity,
             # Note: charge is not defined in the current Particle class
         }
-    
+
     return particles_info
