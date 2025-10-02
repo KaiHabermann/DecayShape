@@ -16,16 +16,30 @@ Thank you for your interest in contributing to DecayShape! This document provide
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. **Install in development mode**
+3. **Set up development environment**
+
+   **Option A: Use the setup script (recommended)**
    ```bash
-   pip install -e .
-   pip install pytest pytest-cov black isort flake8 mypy
-   pip install matplotlib pandas  # For benchmarks and examples
+   # Linux/macOS
+   bash scripts/setup-dev.sh
+
+   # Windows
+   scripts\setup-dev.bat
    ```
 
-4. **Install JAX (optional, for backend testing)**
+   **Option B: Manual setup**
    ```bash
-   pip install jax jaxlib
+   # Install in development mode
+   pip install -e .
+
+   # Install development dependencies
+   pip install pytest pytest-cov black isort flake8 mypy pre-commit
+   pip install flake8-docstrings flake8-bugbear bandit pydocstyle pyupgrade autoflake
+   pip install matplotlib pandas  # For benchmarks and examples
+   pip install jax jaxlib  # Optional, for backend testing
+
+   # Install pre-commit hooks
+   pre-commit install
    ```
 
 ## Running Tests
@@ -46,19 +60,22 @@ pytest -k "not jax"  # Skip JAX tests
 
 ## Code Style
 
-We use several tools to maintain code quality:
+We use several tools to maintain code quality. These are automatically run by pre-commit hooks:
 
 ```bash
-# Format code
-black decayshape/
-isort decayshape/
+# Run all pre-commit hooks manually
+pre-commit run --all-files
 
-# Check linting
-flake8 decayshape/
-
-# Type checking
-mypy decayshape/
+# Run individual tools
+black decayshape/          # Format code
+isort decayshape/          # Sort imports
+flake8 decayshape/         # Check linting
+mypy decayshape/           # Type checking
+bandit -r decayshape/      # Security checks
+pydocstyle decayshape/     # Docstring style
 ```
+
+**Pre-commit hooks** will automatically run these checks before each commit. If any check fails, the commit will be blocked until you fix the issues.
 
 ## Adding New Lineshapes
 
@@ -76,26 +93,26 @@ Example:
 class MyLineshape(Lineshape):
     """
     My custom lineshape.
-    
+
     References:
         - Author et al., "Paper Title", Journal (Year)
     """
-    
+
     # Fixed parameters
     channel_mass: FixedParam[float] = Field(..., description="Channel mass")
-    
-    # Optimization parameters  
+
+    # Optimization parameters
     pole_mass: float = Field(..., description="Pole mass")
     width: float = Field(..., description="Width")
-    
+
     @property
     def parameter_order(self) -> List[str]:
         return ["pole_mass", "width"]
-    
+
     def __call__(self, *args, **kwargs) -> Union[float, Any]:
         params = self._get_parameters(*args, **kwargs)
         np = config.backend  # Always get backend dynamically
-        
+
         # Implementation here
         return result
 ```
@@ -114,15 +131,15 @@ class TestMyLineshape:
     def test_basic_functionality(self):
         # Test basic lineshape evaluation
         pass
-    
+
     def test_parameter_override(self):
         # Test parameter override at call time
         pass
-    
+
     def test_backend_switching(self):
         # Test that backend switching works
         pass
-    
+
     def test_serialization(self):
         # Test Pydantic serialization
         pass

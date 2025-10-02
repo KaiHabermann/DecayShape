@@ -65,60 +65,14 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install linting dependencies
+    - name: Install pre-commit
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 black isort mypy
-        pip install numpy pydantic  # Required for type checking
+        pip install pre-commit
 
-    - name: Run flake8
+    - name: Run pre-commit (lint hooks)
       run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 decayshape --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 decayshape --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Check code formatting with black
-      run: |
-        black --check --diff decayshape/
-
-    - name: Check import sorting with isort
-      run: |
-        isort --check-only --diff decayshape/
-
-    - name: Type checking with mypy
-      run: |
-        mypy decayshape/ --ignore-missing-imports || echo "Type checking completed with warnings"
-
-  benchmark:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install numpy pydantic matplotlib pandas
-        pip install -e .
-
-    - name: Run performance benchmarks
-      run: |
-        cd benchmark
-        python kmatrix_performance.py
-        
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
-      with:
-        name: benchmark-results
-        path: |
-          benchmark/kmatrix_performance_results.csv
-          benchmark/kmatrix_performance_results.png
+        python -m pre_commit run --all-files
 
   docs:
     runs-on: ubuntu-latest
@@ -142,20 +96,20 @@ jobs:
         python -c "
         from decayshape import export_schemas_to_file, get_common_particles_info
         import json
-        
+
         # Export lineshape schemas
         export_schemas_to_file('docs/lineshape_schemas.json')
-        
+
         # Export particle information
         particles = get_common_particles_info()
         with open('docs/particles.json', 'w') as f:
             json.dump(particles, f, indent=2)
-        
+
         print('Documentation files generated successfully')
         "
 
     - name: Upload documentation artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: documentation
         path: |
