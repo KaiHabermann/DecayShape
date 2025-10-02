@@ -105,7 +105,7 @@ class TestChannelAutoWrapping:
         s_above_threshold = 0.5  # GeV^2, above ππ threshold
         momentum = channel.momentum(s_above_threshold)
         assert np.isfinite(momentum)
-        assert momentum > 0  # Should be positive above threshold
+        assert np.real(momentum) > 0  # Should be positive above threshold
         
         # Test phase space factor
         ps_factor = channel.phase_space_factor(s_above_threshold)

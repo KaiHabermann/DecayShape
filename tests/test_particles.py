@@ -127,7 +127,7 @@ class TestChannel:
         # Test above threshold
         s_above = 0.5  # GeV^2
         momentum_above = channel.momentum(s_above)
-        assert momentum_above > 0
+        assert np.real(momentum_above) > 0
         
         # Test with array input
         s_array = np.array([0.1, 0.3, 0.5, 0.7])
@@ -194,7 +194,7 @@ class TestChannel:
         pipi_momentum = pipi_channel.momentum(s_test)
         kk_momentum = kk_channel.momentum(s_test)
         
-        assert pipi_momentum > kk_momentum  # π is lighter than K
+        assert np.real(pipi_momentum) > np.real(kk_momentum)  # π is lighter than K
 
 
 class TestChannelPhysics:
