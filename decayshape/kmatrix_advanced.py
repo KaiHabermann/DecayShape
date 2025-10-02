@@ -194,16 +194,24 @@ class KMatrixAdvanced(Lineshape):
         where K is the K-matrix and rho is the phase space factor.
         """
         np = config.backend
+        s_len = len(s)
         
-        # Calculate phase space factors for each channel
-        rho = np.zeros((n_channels, len(s)), dtype=complex)
+        # Calculate phase space factors for each channel (vectorized)
+        rho = np.zeros((n_channels, s_len), dtype=complex)
         for i, channel in enumerate(self.channels.value):
             rho[i] = channel.phase_space_factor(s)
         
         # Build K-matrix: K_ij = sum_R (g_Ri * g_Rj) / (m_R^2 - s)
-        K = np.zeros((n_channels, n_channels, len(s)), dtype=complex)
+        # Vectorized approach: compute all pole contributions at once
+        K = np.zeros((n_channels, n_channels, s_len), dtype=complex)
+        
+        # Convert decay couplings to array for vectorized operations
+        g_matrix = np.array(params["decay_couplings"]).reshape(n_poles, n_channels)
+        pole_masses = np.array(params["pole_masses"])
+        
+        # Vectorized computation over all poles and s values
         for R in range(n_poles):
-            m_R = params["pole_masses"][R]
+            m_R = pole_masses[R]
             denominator = m_R**2 - s
             
             # Handle the case where s equals a pole mass (add small epsilon)
@@ -211,15 +219,11 @@ class KMatrixAdvanced(Lineshape):
             denominator = np.where(np.abs(denominator) < epsilon, epsilon, denominator)
             
             # Get decay couplings for this pole
-            g_R = np.zeros(n_channels, dtype=complex)
-            for i in range(n_channels):
-                flat_idx = R * n_channels + i
-                g_R[i] = params["decay_couplings"][flat_idx]
+            g_R = g_matrix[R]  # Shape: (n_channels,)
             
-            # Add contribution to K-matrix for each s value
-            for i in range(n_channels):
-                for j in range(n_channels):
-                    K[i, j] += g_R[i] * g_R[j] / denominator
+            # Vectorized outer product: g_R[:, None] * g_R[None, :] gives (n_channels, n_channels)
+            # Then broadcast over s dimension: / denominator[None, None, :] 
+            K += g_R[:, None, None] * g_R[None, :, None] / denominator[None, None, :]
         
         # Calculate T-matrix: T = K * (I - i*K*rho)^(-1)
         if n_channels == 1:
@@ -227,24 +231,41 @@ class KMatrixAdvanced(Lineshape):
             T_matrix = K[0, 0] / (1 - 1j * K[0, 0] * rho[0])
         else:
             # Multi-channel case: T = K * (I - i*K*rho)^(-1)
-            # Vectorized calculation for all s values at once
-            T_matrix = np.zeros((n_channels, n_channels, len(s)), dtype=complex)
+            # Fully vectorized calculation for all s values at once
+            I = np.eye(n_channels)
             
-            for s_idx in range(len(s)):
-                K_s = K[:, :, s_idx]
-                rho_s = rho[:, s_idx]
-                
-                I = np.eye(n_channels)
-                rho_diag = np.diag(rho_s)
-                denominator_matrix = I - 1j * K_s @ rho_diag
-                
-                # Check if the matrix is invertible
-                det = np.linalg.det(denominator_matrix)
-                if np.abs(det) < 1e-12:
-                    # If determinant is too small, use pseudo-inverse
-                    T_matrix[:, :, s_idx] = K_s @ np.linalg.pinv(denominator_matrix)
-                else:
-                    T_matrix[:, :, s_idx] = K_s @ np.linalg.inv(denominator_matrix)
+            # Create diagonal matrices for all s values: shape (n_channels, n_channels, s_len)
+            rho_diag = np.zeros((n_channels, n_channels, s_len), dtype=complex)
+            for i in range(n_channels):
+                rho_diag[i, i, :] = rho[i, :]
+            
+            # Compute denominator matrices for all s values
+            # I[:, :, None] broadcasts identity to (n_channels, n_channels, s_len)
+            # Use np.einsum for proper matrix multiplication over the last dimension
+            K_rho_product = np.einsum('ijl,jkl->ikl', K, rho_diag)  # (n_channels, n_channels, s_len)
+            denominator_matrices = I[:, :, None] - 1j * K_rho_product
+            
+            # Vectorized matrix inversion for all s values
+            try:
+                # Try to use vectorized solve: K @ inv(denominator_matrices)
+                # This is equivalent to solving: denominator_matrices @ T = K for T
+                T_matrix = np.linalg.solve(
+                    np.transpose(denominator_matrices, (2, 0, 1)),  # (s_len, n_channels, n_channels)
+                    np.transpose(K, (2, 0, 1))  # (s_len, n_channels, n_channels)
+                )
+                T_matrix = np.transpose(T_matrix, (1, 2, 0))  # Back to (n_channels, n_channels, s_len)
+            except np.linalg.LinAlgError:
+                # Fallback to element-wise inversion if vectorized approach fails
+                T_matrix = np.zeros((n_channels, n_channels, s_len), dtype=complex)
+                for s_idx in range(s_len):
+                    K_s = K[:, :, s_idx]
+                    denominator_matrix = denominator_matrices[:, :, s_idx]
+                    
+                    det = np.linalg.det(denominator_matrix)
+                    if np.abs(det) < 1e-12:
+                        T_matrix[:, :, s_idx] = K_s @ np.linalg.pinv(denominator_matrix)
+                    else:
+                        T_matrix[:, :, s_idx] = K_s @ np.linalg.inv(denominator_matrix)
         
         return T_matrix
     
@@ -257,29 +278,36 @@ class KMatrixAdvanced(Lineshape):
         where beta_R are the production couplings and g_Ri are the decay couplings.
         """
         np = config.backend
+        s_len = len(s)
         
-        # Initialize P-vector
-        P_vector = np.zeros((n_channels, len(s)), dtype=complex)
+        # Convert to arrays for vectorized operations
+        g_matrix = np.array(params["decay_couplings"]).reshape(n_poles, n_channels)  # (n_poles, n_channels)
+        beta_array = np.array(params["production_couplings"])  # (n_poles,)
+        pole_masses = np.array(params["pole_masses"])  # (n_poles,)
         
-        for R in range(n_poles):
-            m_R = params["pole_masses"][R]
-            beta_R = params["production_couplings"][R]
-            denominator = -m_R**2 + s
-            
-            # Handle the case where s equals a pole mass (add small epsilon)
-            epsilon = 1e-10
-            denominator = np.where(np.abs(denominator) < epsilon, epsilon, denominator)
-            
-            # Get decay couplings for this pole
-            g_R = np.zeros(n_channels, dtype=complex)
-            for i in range(n_channels):
-                flat_idx = R * n_channels + i
-                g_R[i] = params["decay_couplings"][flat_idx]
-            
-            # Vectorized contribution to P-vector for all channels and s values
-            # P_vector[i, :] += beta_R * g_R[i] / denominator
-            for i in range(n_channels):
-                P_vector[i] += beta_R * g_R[i] / denominator
+        # Vectorized computation over all poles
+        # Shape manipulations for broadcasting:
+        # pole_masses: (n_poles,) -> (n_poles, 1) for broadcasting with s
+        # s: (s_len,) -> (1, s_len) for broadcasting with pole_masses
+        # Result denominator: (n_poles, s_len)
+        denominators = -pole_masses[:, None]**2 + s[None, :]  # (n_poles, s_len)
+        
+        # Handle the case where s equals a pole mass (add small epsilon)
+        epsilon = 1e-10
+        denominators = np.where(np.abs(denominators) < epsilon, epsilon, denominators)
+        
+        # Vectorized P-vector computation:
+        # beta_array: (n_poles,) -> (n_poles, 1, 1) for broadcasting
+        # g_matrix: (n_poles, n_channels) -> (n_poles, n_channels, 1) for broadcasting with s
+        # denominators: (n_poles, s_len) -> (n_poles, 1, s_len) for broadcasting with channels
+        # Result: (n_poles, n_channels, s_len) -> sum over poles -> (n_channels, s_len)
+        
+        contributions = (beta_array[:, None, None] * 
+                        g_matrix[:, :, None] / 
+                        denominators[:, None, :])  # (n_poles, n_channels, s_len)
+        
+        # Sum over all poles to get final P-vector
+        P_vector = np.sum(contributions, axis=0)  # (n_channels, s_len)
         
         return P_vector
     
@@ -292,9 +320,10 @@ class KMatrixAdvanced(Lineshape):
         where T is the T-matrix, rho is the phase space factor, and P is the P-vector.
         """
         np = config.backend
+        s_len = len(s)
         
-        # Calculate phase space factors for each channel
-        rho = np.zeros((n_channels, len(s)), dtype=complex)
+        # Calculate phase space factors for each channel (vectorized)
+        rho = np.zeros((n_channels, s_len), dtype=complex)
         for i, channel in enumerate(self.channels.value):
             rho[i] = channel.phase_space_factor(s)
         
@@ -304,24 +333,48 @@ class KMatrixAdvanced(Lineshape):
             F_vector = P_vector[0] / (1 - 1j * T_matrix * rho[0])
         else:
             # Multi-channel case: F = (I - i*T*rho)^(-1) * P
-            F_vector = np.zeros((n_channels, len(s)), dtype=complex)
+            # Fully vectorized calculation for all s values at once
+            I = np.eye(n_channels)
             
-            for s_idx in range(len(s)):
-                T_s = T_matrix[:, :, s_idx]
-                P_s = P_vector[:, s_idx]
-                rho_s = rho[:, s_idx]
-                
-                I = np.eye(n_channels)
-                rho_diag = np.diag(rho_s)
-                denominator_matrix = I - 1j * T_s @ rho_diag
-                
-                # Check if the matrix is invertible
-                det = np.linalg.det(denominator_matrix)
-                if np.abs(det) < 1e-12:
-                    # If determinant is too small, use pseudo-inverse
-                    F_vector[:, s_idx] = np.linalg.pinv(denominator_matrix) @ P_s
-                else:
-                    F_vector[:, s_idx] = np.linalg.inv(denominator_matrix) @ P_s
+            # Create diagonal matrices for all s values: shape (n_channels, n_channels, s_len)
+            rho_diag = np.zeros((n_channels, n_channels, s_len), dtype=complex)
+            for i in range(n_channels):
+                rho_diag[i, i, :] = rho[i, :]
+            
+            # Compute denominator matrices for all s values
+            # I[:, :, None] broadcasts identity to (n_channels, n_channels, s_len)
+            # Use np.einsum for proper matrix multiplication over the last dimension
+            T_rho_product = np.einsum('ijl,jkl->ikl', T_matrix, rho_diag)  # (n_channels, n_channels, s_len)
+            denominator_matrices = I[:, :, None] - 1j * T_rho_product
+            
+            # Vectorized matrix solve for all s values
+            try:
+                # Solve: denominator_matrices @ F = P for F
+                # Transpose to (s_len, n_channels, n_channels) for batch solve
+                F_matrix = np.linalg.solve(
+                    np.transpose(denominator_matrices, (2, 0, 1)),  # (s_len, n_channels, n_channels)
+                    np.transpose(P_vector, (1, 0))[:, :, None]  # (s_len, n_channels, 1)
+                )
+                F_vector = np.transpose(F_matrix[:, :, 0], (1, 0))  # Back to (n_channels, s_len)
+            except np.linalg.LinAlgError:
+                # Fallback to element-wise inversion if vectorized approach fails
+                F_vector = np.zeros((n_channels, s_len), dtype=complex)
+                for s_idx in range(s_len):
+                    T_s = T_matrix[:, :, s_idx]
+                    P_s = P_vector[:, s_idx]
+                    rho_s = rho[:, s_idx]
+                    
+                    I = np.eye(n_channels)
+                    rho_diag_s = np.diag(rho_s)
+                    denominator_matrix = I - 1j * T_s @ rho_diag_s
+                    
+                    # Check if the matrix is invertible
+                    det = np.linalg.det(denominator_matrix)
+                    if np.abs(det) < 1e-12:
+                        # If determinant is too small, use pseudo-inverse
+                        F_vector[:, s_idx] = np.linalg.pinv(denominator_matrix) @ P_s
+                    else:
+                        F_vector[:, s_idx] = np.linalg.inv(denominator_matrix) @ P_s
         
         return F_vector
     
