@@ -6,18 +6,28 @@ Provides abstract base class that all lineshapes must implement using Pydantic.
 
 from abc import ABC, abstractmethod
 from typing import Any, Union, Dict, List, Optional, TypeVar, Generic, get_origin, get_args
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
 from .config import config
 
 # Template type for marking fixed parameters
 T = TypeVar('T')
-class FixedParam(Generic[T]):
-    """Template type for marking fixed parameters that don't change during optimization."""
-    def __init__(self, value: T):
-        self.value = value
+class FixedParam(BaseModel, Generic[T]):
+    """Pydantic model for marking fixed parameters that don't change during optimization."""
+    value: T = Field(..., description="The fixed value that doesn't change during optimization")
+    
+    class Config:
+        arbitrary_types_allowed = True
     
     def __getitem__(self, item):
-        return self.value
+        """Forward indexing to the value."""
+        return self.value[item]
+    
+    def __getattr__(self, name: str):
+        """Forward all attribute access to the value."""
+        if name.startswith('_') or name in ('value', 'model_fields', 'model_config'):
+            # Don't forward private attributes or Pydantic internals
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+        return getattr(self.value, name)
 
 class LineshapeBase(BaseModel):
     """Base Pydantic model for all lineshapes."""
@@ -41,12 +51,12 @@ class LineshapeBase(BaseModel):
                 field_type = field_info.annotation
                 
                 # Check if this is a FixedParam field
-                if get_origin(field_type) is FixedParam:
+                if isinstance(field_type, type) and issubclass(field_type, FixedParam):
                     value = values[field_name]
                     
                     # If the value is not already a FixedParam, wrap it
                     if not isinstance(value, FixedParam):
-                        values[field_name] = FixedParam(value)
+                        values[field_name] = FixedParam(value=value)
         
         return values
 
@@ -138,11 +148,11 @@ class Lineshape(LineshapeBase, ABC):
         """
         pass
     
-    def model_dump(self) -> Dict[str, Any]:
-        """Serialize the lineshape to a dictionary."""
-        return super().model_dump()
+    # def model_dump(self) -> Dict[str, Any]:
+    #     """Serialize the lineshape to a dictionary."""
+    #     return super().model_dump()
     
-    @classmethod
-    def model_validate(cls, data: Dict[str, Any]):
-        """Deserialize a lineshape from a dictionary."""
-        return super().model_validate(data)
+    # @classmethod
+    # def model_validate(cls, data: Dict[str, Any]):
+    #     """Deserialize a lineshape from a dictionary."""
+    #     return super().model_validate(data)

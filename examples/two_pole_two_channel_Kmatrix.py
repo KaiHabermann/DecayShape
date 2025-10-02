@@ -28,23 +28,23 @@ def create_threshold_kmatrix():
     
     # Create channels
     pipi_channel = ds.Channel(
-        particle1=ds.FixedParam(CommonParticles.PI_PLUS),
-        particle2=ds.FixedParam(CommonParticles.PI_MINUS)
+        particle1=CommonParticles.PI_PLUS,
+        particle2=CommonParticles.PI_MINUS
     )
     
     kk_channel = ds.Channel(
-        particle1=ds.FixedParam(CommonParticles.K_PLUS),
-        particle2=ds.FixedParam(CommonParticles.K_MINUS)
+        particle1=CommonParticles.K_PLUS,
+        particle2=CommonParticles.K_MINUS
     )
     
     # Create K-matrix with two poles and two channels
     kmat = ds.KMatrixAdvanced(
-        s=ds.FixedParam(s_values),
-        channels=ds.FixedParam([pipi_channel, kk_channel]),
+        s=s_values,
+        channels=[pipi_channel, kk_channel],
         pole_masses=[0.6, 1.0],  # First pole below ππ threshold, second above KK threshold
         production_couplings=[1.0, 0.8],  # Different production strengths
         decay_couplings=[1.0, 0.5, 0.3, 0.7],  # 2 poles × 2 channels = 4 couplings
-        output_channel=ds.FixedParam(0)  # Will be overridden for different channels
+        output_channel=0  # Will be overridden for different channels
     )
     
     return kmat, s_values
@@ -60,23 +60,23 @@ def plot_kmatrix_channels():
     
     # Channel 0 (ππ)
     kmat_0 = ds.KMatrixAdvanced(
-        s=ds.FixedParam(s_values),
+        s=s_values,
         channels=kmat.channels,
         pole_masses=kmat.pole_masses,
         production_couplings=kmat.production_couplings,
         decay_couplings=kmat.decay_couplings,
-        output_channel=ds.FixedParam(0)
+        output_channel=0
     )
     result_0 = kmat_0()
     
     # Channel 1 (KK)
     kmat_1 = ds.KMatrixAdvanced(
-        s=ds.FixedParam(s_values),
+        s=s_values,
         channels=kmat.channels,
         pole_masses=kmat.pole_masses,
         production_couplings=kmat.production_couplings,
         decay_couplings=kmat.decay_couplings,
-        output_channel=ds.FixedParam(1)
+        output_channel=1
     )
     result_1 = kmat_1()
     

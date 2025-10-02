@@ -377,18 +377,18 @@ def create_simple_kmatrix(s_values: Union[float, Any],
     
     # Create channel
     channel = Channel(
-        particle1=FixedParam(channel1_particle1),
-        particle2=FixedParam(channel1_particle2)
+        particle1=channel1_particle1,
+        particle2=channel1_particle2
     )
     
     # Create K-matrix
     return KMatrixAdvanced(
-        s=FixedParam(s_values),
-        channels=FixedParam([channel]),
+        s=s_values,
+        channels=[channel],
         pole_masses=[pole_mass],
         production_couplings=[1.0],  # Single production coupling
         decay_couplings=[1.0],  # Single decay coupling
-        output_channel=FixedParam(output_channel),
+        output_channel=output_channel,
         **kwargs
     )
 
@@ -413,18 +413,18 @@ def create_pipi_kmatrix(s_values: Union[float, Any],
     """
     # Create π⁺π⁻ channel
     channel = Channel(
-        particle1=FixedParam(CommonParticles.PI_PLUS),
-        particle2=FixedParam(CommonParticles.PI_MINUS)
+        particle1=CommonParticles.PI_PLUS,
+        particle2=CommonParticles.PI_MINUS
     )
     
     # Create K-matrix
     return KMatrixAdvanced(
-        s=FixedParam(s_values),
-        channels=FixedParam([channel]),
+        s=s_values,
+        channels=[channel],
         pole_masses=[pole_mass],
         production_couplings=[width],  # Use width as production coupling
         decay_couplings=[width],  # Use width as decay coupling
-        output_channel=FixedParam(output_channel),
+        output_channel=output_channel,
         **kwargs
     )
 
@@ -451,23 +451,23 @@ def create_multi_channel_kmatrix(s_values: Union[float, Any],
     if channels is None:
         channels = [
             Channel(
-                particle1=FixedParam(CommonParticles.PI_PLUS),
-                particle2=FixedParam(CommonParticles.PI_MINUS)
+                particle1=CommonParticles.PI_PLUS,
+                particle2=CommonParticles.PI_MINUS
             ),
             Channel(
-                particle1=FixedParam(CommonParticles.K_PLUS),
-                particle2=FixedParam(CommonParticles.K_MINUS)
+                particle1=CommonParticles.K_PLUS,
+                particle2=CommonParticles.K_MINUS
             )
         ]
     
     # Create K-matrix
     n_channels = len(channels)
     return KMatrixAdvanced(
-        s=FixedParam(s_values),
-        channels=FixedParam(channels),
+        s=s_values,
+        channels=channels,
         pole_masses=[pole_mass],
         production_couplings=[0.1],  # Single production coupling
         decay_couplings=[0.1, 0.05],  # Different decay couplings for each channel
-        output_channel=FixedParam(output_channel),
+        output_channel=output_channel,
         **kwargs
     )

@@ -11,7 +11,6 @@ from .base import FixedParam
 from .lineshapes import (
     RelativisticBreitWigner,
     Flatte,
-    KMatrix,
 )
 from .particles import (
     Particle,
@@ -36,7 +35,6 @@ __all__ = [
     "FixedParam",
     "RelativisticBreitWigner",
     "Flatte",
-    "KMatrix",
     "Particle",
     "Channel",
     "CommonParticles",

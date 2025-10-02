@@ -14,8 +14,7 @@ from .config import config
 from .utils import (
     blatt_weiskopf_form_factor,
     angular_momentum_barrier_factor,
-    relativistic_breit_wigner_denominator,
-    k_matrix_element
+    relativistic_breit_wigner_denominator
 )
 
 
@@ -84,22 +83,21 @@ class Flatte(Lineshape):
     """
     
     # Fixed parameters (don't change during optimization)
-    channel1_mass1: FixedParam[float] = Field(default_factory=lambda: FixedParam(0.14), description="Mass of first particle in first channel")
-    channel1_mass2: FixedParam[float] = Field(default_factory=lambda: FixedParam(0.14), description="Mass of second particle in first channel")
-    channel2_mass1: FixedParam[float] = Field(default_factory=lambda: FixedParam(0.49), description="Mass of first particle in second channel")
-    channel2_mass2: FixedParam[float] = Field(default_factory=lambda: FixedParam(0.49), description="Mass of second particle in second channel")
+    channel1_mass1: FixedParam[float]
+    channel1_mass2: FixedParam[float]
+    channel2_mass1: FixedParam[float]
+    channel2_mass2: FixedParam[float]
     
     # Optimization parameters
-    pole_mass: float = Field(default=0.98, description="Pole mass of the resonance")
-    width1: float = Field(default=0.1, description="Width for first channel")
-    width2: float = Field(default=0.05, description="Width for second channel")
-    r1: float = Field(default=1.0, description="Hadron radius for first channel")
-    r2: float = Field(default=1.0, description="Hadron radius for second channel")
-    L1: int = Field(default=0, description="Angular momentum for first channel")
-    L2: int = Field(default=0, description="Angular momentum for second channel")
+    pole_mass: float = Field(description="Pole mass of the resonance")
+    width1: float = Field(description="Width for first channel")
+    width2: float = Field(description="Width for second channel")
+    r1: float = Field(description="Hadron radius for first channel")
+    r2: float = Field(description="Hadron radius for second channel")
+    L1: int = Field(description="Angular momentum for first channel")
+    L2: int = Field(description="Angular momentum for second channel")
     q01: Optional[float] = Field(default=None, description="Reference momentum for first channel")
     q02: Optional[float] = Field(default=None, description="Reference momentum for second channel")
-    
     @property
     def parameter_order(self) -> List[str]:
         """Return the order of parameters for positional arguments."""
@@ -152,65 +150,3 @@ class Flatte(Lineshape):
         denominator = self.s.value - params["pole_mass"]**2 + 1j * params["pole_mass"] * total_width
         
         return 1.0 / denominator
-
-
-class KMatrix(Lineshape):
-    """
-    K-matrix lineshape for multi-channel resonances.
-    
-    The K-matrix formalism is used for coupled-channel analysis
-    and provides a unitary description of scattering.
-    """
-    
-    # Fixed parameters (don't change during optimization)
-    channel_mass1: FixedParam[float] = Field(default_factory=lambda: FixedParam(0.14), description="Mass of first particle in decay channel")
-    channel_mass2: FixedParam[float] = Field(default_factory=lambda: FixedParam(0.14), description="Mass of second particle in decay channel")
-    
-    # Optimization parameters
-    pole_mass: float = Field(default=0.775, description="Pole mass of the resonance")
-    width: float = Field(default=0.15, description="Resonance width")
-    coupling: float = Field(default=1.0, description="Coupling strength")
-    r: float = Field(default=1.0, description="Hadron radius parameter")
-    L: int = Field(default=0, description="Angular momentum of the decay")
-    q0: Optional[float] = Field(default=None, description="Reference momentum")
-    
-    @property
-    def parameter_order(self) -> List[str]:
-        """Return the order of parameters for positional arguments."""
-        return ["pole_mass", "width", "coupling", "r", "L", "q0"]
-    
-    def model_post_init(self, __context):
-        """Post-initialization to set q0 if not provided."""
-        if self.q0 is None:
-            self.q0 = self.pole_mass / 2.0
-    
-    def __call__(self, *args, **kwargs) -> Union[float, Any]:
-        """
-        Evaluate the K-matrix lineshape at the s values from construction.
-        
-        Args:
-            *args: Positional parameter overrides (width, coupling, r, L, q0)
-            **kwargs: Keyword parameter overrides
-            
-        Returns:
-            K-matrix amplitude
-        """
-        # Get parameters with overrides
-        params = self._get_parameters(*args, **kwargs)
-        
-        np = config.backend
-        
-        # Calculate momentum using proper channel masses
-        m1 = self.channel_mass1.value
-        m2 = self.channel_mass2.value
-        q = np.sqrt((self.s.value - (m1 + m2)**2) * (self.s.value - (m1 - m2)**2)) / (2 * np.sqrt(self.s.value))
-        
-        # Form factor and barrier factor
-        F = blatt_weiskopf_form_factor(q, params["q0"], params["r"], params["L"])
-        B = angular_momentum_barrier_factor(q, params["q0"], params["L"])
-        
-        # K-matrix element (use optimization parameter pole_mass)
-        K = k_matrix_element(self.s.value, params["pole_mass"], params["width"], params["coupling"])
-        
-        # K-matrix amplitude (simplified form)
-        return F * B * K / (1.0 + 1j * K)

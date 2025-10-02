@@ -4,9 +4,9 @@ Particle classes for hadron physics.
 Provides classes for particles with mass, spin, and parity quantum numbers.
 """
 
-from typing import Union, Any
+from typing import Union, Any, get_origin
 import numpy as np
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from .base import FixedParam
 
 
@@ -50,6 +50,30 @@ class Channel(BaseModel):
     
     class Config:
         arbitrary_types_allowed = True
+    
+    @model_validator(mode='before')
+    @classmethod
+    def auto_wrap_fixed_params(cls, values):
+        """Automatically wrap values in FixedParam for FixedParam fields."""
+        if not isinstance(values, dict):
+            return values
+        
+        # Get the model fields
+        model_fields = cls.model_fields
+        
+        for field_name, field_info in model_fields.items():
+            if field_name in values:
+                field_type = field_info.annotation
+                
+                # Check if this is a FixedParam field
+                if isinstance(field_type, type) and issubclass(field_type, FixedParam):
+                    value = values[field_name]
+                    
+                    # If the value is not already a FixedParam, wrap it
+                    if not isinstance(value, FixedParam):
+                        values[field_name] = FixedParam(value=value)
+        
+        return values
     
     @property
     def total_mass(self) -> float:

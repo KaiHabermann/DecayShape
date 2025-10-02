@@ -89,21 +89,3 @@ def relativistic_breit_wigner_denominator(s: Union[float, Any],
     return s - mass**2 + 1j * mass * width
 
 
-def k_matrix_element(s: Union[float, Any], 
-                    mass: float, 
-                    width: float,
-                    coupling: float = 1.0) -> Union[float, Any]:
-    """
-    Calculate a K-matrix element.
-    
-    Args:
-        s: Mandelstam variable s (mass squared)
-        mass: Resonance mass
-        width: Resonance width
-        coupling: Coupling strength
-        
-    Returns:
-        K-matrix element
-    """
-    np = config.backend
-    return coupling * mass * width / (mass**2 - s)
