@@ -51,7 +51,7 @@ jobs:
 
       # Uncomment the following step to publish to TestPyPI instead
       - name: Publish to TestPyPI
-        if: true  # set to true to use TestPyPI
+        if: false  # set to true to use TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
