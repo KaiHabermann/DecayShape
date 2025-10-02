@@ -123,7 +123,6 @@ class TestRelativisticBreitWigner:
         data = bw.model_dump()
         assert "pole_mass" in data
         assert "width" in data
-        assert "s" in data
 
         # Test model validation
         bw_restored = RelativisticBreitWigner.model_validate(data)

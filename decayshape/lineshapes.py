@@ -42,9 +42,9 @@ class RelativisticBreitWigner(Lineshape):
         if self.q0 is None:
             self.q0 = self.pole_mass / 2.0
 
-    def __call__(self, *args, **kwargs) -> Union[float, Any]:
+    def function(self, s, *args, **kwargs) -> Union[float, Any]:
         """
-        Evaluate the Relativistic Breit-Wigner at the s values from construction.
+        Evaluate the Relativistic Breit-Wigner at given s values.
 
         Args:
             *args: Positional parameter overrides (width, r, L, q0)
@@ -59,7 +59,7 @@ class RelativisticBreitWigner(Lineshape):
         np = config.backend  # Get backend dynamically
 
         # Calculate momentum in the decay frame
-        q = np.sqrt(self.s.value) / 2.0
+        q = np.sqrt(s) / 2.0
 
         # Blatt-Weiskopf form factor
         F = blatt_weiskopf_form_factor(q, params["q0"], params["r"], params["L"])
@@ -68,9 +68,16 @@ class RelativisticBreitWigner(Lineshape):
         B = angular_momentum_barrier_factor(q, params["q0"], params["L"])
 
         # Breit-Wigner denominator (use optimization parameter pole_mass)
-        denominator = relativistic_breit_wigner_denominator(self.s.value, params["pole_mass"], params["width"])
+        denominator = relativistic_breit_wigner_denominator(s, params["pole_mass"], params["width"])
 
         return F * B / denominator
+
+    def __call__(self, *args, s=None, **kwargs) -> Union[float, Any]:
+        # Resolve s: prefer call-time s, else field value
+        s_val = s if s is not None else (self.s.value if self.s is not None else None)
+        if s_val is None:
+            raise ValueError("s must be provided either at construction or call time")
+        return self.function(s_val, *args, **kwargs)
 
 
 class Flatte(Lineshape):
@@ -110,9 +117,9 @@ class Flatte(Lineshape):
         if self.q02 is None:
             self.q02 = self.pole_mass / 2.0
 
-    def __call__(self, *args, **kwargs) -> Union[float, Any]:
+    def function(self, s, *args, **kwargs) -> Union[float, Any]:
         """
-        Evaluate the Flatté lineshape at the s values from construction.
+        Evaluate the Flatté lineshape at given s values.
 
         Args:
             *args: Positional parameter overrides (width1, width2, r1, r2, L1, L2, q01, q02)
@@ -130,12 +137,12 @@ class Flatte(Lineshape):
         # Channel 1 momentum
         m1_1 = self.channel1_mass1.value
         m1_2 = self.channel1_mass2.value
-        q1 = np.sqrt((self.s.value - (m1_1 + m1_2) ** 2) * (self.s.value - (m1_1 - m1_2) ** 2)) / (2 * np.sqrt(self.s.value))
+        q1 = np.sqrt((s - (m1_1 + m1_2) ** 2) * (s - (m1_1 - m1_2) ** 2)) / (2 * np.sqrt(s))
 
         # Channel 2 momentum
         m2_1 = self.channel2_mass1.value
         m2_2 = self.channel2_mass2.value
-        q2 = np.sqrt((self.s.value - (m2_1 + m2_2) ** 2) * (self.s.value - (m2_1 - m2_2) ** 2)) / (2 * np.sqrt(self.s.value))
+        q2 = np.sqrt((s - (m2_1 + m2_2) ** 2) * (s - (m2_1 - m2_2) ** 2)) / (2 * np.sqrt(s))
 
         # Form factors and barrier factors for both channels
         F1 = blatt_weiskopf_form_factor(q1, params["q01"], params["r1"], params["L1"])
@@ -147,6 +154,12 @@ class Flatte(Lineshape):
         total_width = params["width1"] * F1 * B1 + params["width2"] * F2 * B2
 
         # Flatté denominator (use optimization parameter pole_mass)
-        denominator = self.s.value - params["pole_mass"] ** 2 + 1j * params["pole_mass"] * total_width
+        denominator = s - params["pole_mass"] ** 2 + 1j * params["pole_mass"] * total_width
 
         return 1.0 / denominator
+
+    def __call__(self, *args, s=None, **kwargs) -> Union[float, Any]:
+        s_val = s if s is not None else (self.s.value if self.s is not None else None)
+        if s_val is None:
+            raise ValueError("s must be provided either at construction or call time")
+        return self.function(s_val, *args, **kwargs)

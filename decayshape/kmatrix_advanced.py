@@ -189,8 +189,11 @@ class KMatrixAdvanced(Lineshape):
             # Multi-channel: F_vector is 2D, return specified channel
             return F_vector[output_idx, :]
 
-    def __call__(self, *args, **kwargs) -> Union[float, Any]:
-        return self.function(self.s.value, *args, **kwargs)
+    def __call__(self, *args, s=None, **kwargs) -> Union[float, Any]:
+        s_val = s if s is not None else (self.s.value if self.s is not None else None)
+        if s_val is None:
+            raise ValueError("s must be provided either at construction or call time")
+        return self.function(s_val, *args, **kwargs)
 
     def _build_t_matrix(
         self, params: dict[str, Any], s: Union[float, Any], n_poles: int, n_channels: int

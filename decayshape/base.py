@@ -42,11 +42,19 @@ class FixedParam(BaseModel, Generic[T]):
 class LineshapeBase(BaseModel):
     """Base Pydantic model for all lineshapes."""
 
-    s: FixedParam[Union[float, Any]] = Field(..., description="Mandelstam variable s (mass squared) or array of s values")
+    s: Optional[FixedParam[Union[float, Any]]] = Field(
+        default_factory=lambda: FixedParam(value=None),
+        exclude=True,
+        description="Mandelstam variable s (mass squared) or array of s values",
+    )
 
     @field_validator("s", mode="before")
     @classmethod
     def ensure_s_is_array(cls, v):
+        if v is None:
+            return FixedParam(value=None)
+        if isinstance(v, FixedParam) and v.value is None:
+            return v
         # If v is already a FixedParam, extract its value for checking
         value = v.value if isinstance(v, FixedParam) else v
         # Check if value is an iterable (but not a string or bytes)
@@ -77,15 +85,26 @@ class LineshapeBase(BaseModel):
             if field_name in values:
                 field_type = field_info.annotation
 
-                # Check if this is a FixedParam field
-                if isinstance(field_type, type) and issubclass(field_type, FixedParam):
-                    value = values[field_name]
+                # Determine if the field expects a FixedParam, including Optional[FixedParam]
+                expects_fixed = False
+                origin = get_origin(field_type)
+                if origin is Union:
+                    for arg in get_args(field_type):
+                        arg_origin = get_origin(arg)
+                        if (isinstance(arg, type) and issubclass(arg, FixedParam)) or arg_origin is FixedParam:
+                            expects_fixed = True
+                            break
+                elif isinstance(field_type, type) and issubclass(field_type, FixedParam):
+                    expects_fixed = True
 
-                    # If the value is not already a FixedParam, wrap it
-                    if not isinstance(value, FixedParam):
+                if expects_fixed:
+                    value = values[field_name]
+                    # If the value is not already a FixedParam and not None, wrap it
+                    if value is not None and not isinstance(value, FixedParam):
                         if isinstance(value, dict) and "value" in value:
                             value = value["value"]
-                        values[field_name] = FixedParam(value=value)
+                        if value is not None:
+                            values[field_name] = FixedParam(value=value)
 
         return values
 
