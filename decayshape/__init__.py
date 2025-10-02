@@ -24,6 +24,13 @@ from .utils import (
     blatt_weiskopf_form_factor,
     angular_momentum_barrier_factor,
 )
+from .schema_utils import (
+    get_all_lineshape_schemas,
+    get_lineshape_schema,
+    get_available_lineshapes,
+    export_schemas_to_file,
+    get_common_particles_info,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -38,4 +45,9 @@ __all__ = [
     "KMatrixAdvanced",
     "blatt_weiskopf_form_factor",
     "angular_momentum_barrier_factor",
+    "get_all_lineshape_schemas",
+    "get_lineshape_schema",
+    "get_available_lineshapes",
+    "export_schemas_to_file",
+    "get_common_particles_info",
 ]

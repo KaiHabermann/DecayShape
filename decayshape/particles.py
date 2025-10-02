@@ -5,9 +5,9 @@ Provides classes for particles with mass, spin, and parity quantum numbers.
 """
 
 from typing import Union, Any, get_origin
-import numpy as np
 from pydantic import BaseModel, Field, model_validator
 from .base import FixedParam
+from .config import config
 
 
 class Particle(BaseModel):
@@ -105,18 +105,18 @@ class Channel(BaseModel):
         
         # Calculate the argument of the square root
         # arg = (s - (m1 + m2)^2) * (s - (m1 - m2)^2)
-        s_plus = s - (m1 + m2)**2
-        s_minus = s - (m1 - m2)**2
+        s_plus = s - (m1 + m2)**2 + 0j
+        s_minus = s - (m1 - m2)**2 + 0j
         arg = s_plus * s_minus
         
         # Use complex square root to handle negative arguments
         # sqrt(negative) = i * sqrt(|negative|)
-        if np.isscalar(arg):
+        if config.backend.isscalar(arg):
             # Single value case
-            q = np.sqrt(complex(s_plus)) * np.sqrt(complex(s_minus)) / (2 * np.sqrt(s))
+            q = (s_plus)**0.5 * (s_minus)**0.5 / (2 * s**0.5)
         else:
             # Array case
-            q = np.sqrt(s_plus.astype(complex)) * np.sqrt(s_minus.astype(complex)) / (2 * np.sqrt(s))
+            q = (s_plus)**0.5 * (s_minus)**0.5 / (2 * s**0.5)
         return q
     
     def phase_space_factor(self, s: Union[float, Any]) -> Union[float, Any]:
@@ -134,17 +134,8 @@ class Channel(BaseModel):
         """
         threshold_squared = self.threshold**2
         
-        if np.isscalar(s):
-            # Single value case
-            if s < threshold_squared:
-                return 0.0
-            else:
-                q = self.momentum(s)
-                return 2 * q / np.sqrt(s)
-        else:
-            # Array case - use np.where for vectorized operation
-            q = self.momentum(s)
-            return np.where(s < threshold_squared, 0.0, 2 * q / np.sqrt(s))
+        q = self.momentum(s)
+        return config.backend.where(s < threshold_squared, 0.0, 2 * q / s**0.5)
     
     def __repr__(self) -> str:
         """String representation of the channel."""

@@ -1,0 +1,163 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        exclude:
+          # Reduce matrix size by excluding some combinations
+          - os: windows-latest
+            python-version: '3.9'
+          - os: macos-latest
+            python-version: '3.9'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        pip install numpy pydantic
+        # Install optional dependencies for extended testing
+        pip install matplotlib pandas || true
+        # Try to install JAX for backend testing (may fail on some platforms)
+        pip install jax jaxlib || echo "JAX installation failed, continuing without JAX"
+
+    - name: Install package in development mode
+      run: |
+        pip install -e .
+
+    - name: Run tests with pytest
+      run: |
+        pytest tests/ -v --cov=decayshape --cov-report=xml --cov-report=term-missing
+
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install linting dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort mypy
+        pip install numpy pydantic  # Required for type checking
+
+    - name: Run flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 decayshape --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 decayshape --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Check code formatting with black
+      run: |
+        black --check --diff decayshape/
+
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff decayshape/
+
+    - name: Type checking with mypy
+      run: |
+        mypy decayshape/ --ignore-missing-imports || echo "Type checking completed with warnings"
+
+  benchmark:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pydantic matplotlib pandas
+        pip install -e .
+
+    - name: Run performance benchmarks
+      run: |
+        cd benchmark
+        python kmatrix_performance.py
+        
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: |
+          benchmark/kmatrix_performance_results.csv
+          benchmark/kmatrix_performance_results.png
+
+  docs:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pydantic
+        pip install -e .
+
+    - name: Generate JSON schemas for documentation
+      run: |
+        python -c "
+        from decayshape import export_schemas_to_file, get_common_particles_info
+        import json
+        
+        # Export lineshape schemas
+        export_schemas_to_file('docs/lineshape_schemas.json')
+        
+        # Export particle information
+        particles = get_common_particles_info()
+        with open('docs/particles.json', 'w') as f:
+            json.dump(particles, f, indent=2)
+        
+        print('Documentation files generated successfully')
+        "
+
+    - name: Upload documentation artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: documentation
+        path: |
+          docs/lineshape_schemas.json
+          docs/particles.json

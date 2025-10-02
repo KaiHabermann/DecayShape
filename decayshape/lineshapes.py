@@ -10,7 +10,7 @@ Contains various lineshapes commonly used in amplitude analysis:
 from typing import Union, Any, Optional, List
 from pydantic import Field
 from .base import Lineshape, FixedParam
-from .config import config
+from decayshape import config
 from .utils import (
     blatt_weiskopf_form_factor,
     angular_momentum_barrier_factor,
@@ -57,7 +57,7 @@ class RelativisticBreitWigner(Lineshape):
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
         
-        np = config.backend
+        np = config.backend  # Get backend dynamically
         
         # Calculate momentum in the decay frame
         q = np.sqrt(self.s.value) / 2.0
@@ -124,7 +124,7 @@ class Flatte(Lineshape):
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
         
-        np = config.backend
+        np = config.backend  # Get backend dynamically
         
         # Calculate momenta in both channels using proper channel masses
         # Channel 1 momentum

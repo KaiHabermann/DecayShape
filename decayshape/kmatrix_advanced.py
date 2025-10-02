@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Union
 from pydantic import BaseModel, Field, model_validator
 from .base import Lineshape, FixedParam
 from .particles import Particle, Channel, CommonParticles
-from .config import config
+from decayshape import config
 
 
 class KMatrixAdvanced(Lineshape):
@@ -149,7 +149,7 @@ class KMatrixAdvanced(Lineshape):
         
         return params
     
-    def __call__(self, *args, **kwargs) -> Union[float, Any]:
+    def function(self, s, *args, **kwargs) -> Union[float, Any]:
         """
         Evaluate the advanced K-matrix lineshape.
         
@@ -162,8 +162,7 @@ class KMatrixAdvanced(Lineshape):
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
         
-        np = config.backend
-        s = self.s.value
+        np = config.backend  # Get backend dynamically
         n_poles = len(params["pole_masses"])
         n_channels = len(self.channels.value)
         
@@ -184,6 +183,9 @@ class KMatrixAdvanced(Lineshape):
         else:
             # Multi-channel: F_vector is 2D, return specified channel
             return F_vector[output_idx, :]
+
+    def __call__(self, *args, **kwargs) -> Union[float, Any]:
+        return self.function(self.s.value, *args, **kwargs)
     
     def _build_t_matrix(self, params: Dict[str, Any], s: Union[float, Any], 
                        n_poles: int, n_channels: int) -> Union[float, Any]:
@@ -193,13 +195,19 @@ class KMatrixAdvanced(Lineshape):
         T = K * (I - i*K*rho)^(-1)
         where K is the K-matrix and rho is the phase space factor.
         """
-        np = config.backend
-        s_len = len(s)
+        np = config.backend  # Get backend dynamically
+        s_len = config.backend.shape(s)
+        if len(s_len) == 0:
+            s_len = 1
+        else:
+            s_len,  = s_len
         
         # Calculate phase space factors for each channel (vectorized)
-        rho = np.zeros((n_channels, s_len), dtype=complex)
-        for i, channel in enumerate(self.channels.value):
-            rho[i] = channel.phase_space_factor(s)
+        rho_list = []
+        for channel in self.channels.value:
+            val = channel.phase_space_factor(s)
+            rho_list.append(val)
+        rho = np.stack(rho_list, axis=0)
         
         # Build K-matrix: K_ij = sum_R (g_Ri * g_Rj) / (m_R^2 - s)
         # Vectorized approach: compute all pole contributions at once
@@ -234,10 +242,8 @@ class KMatrixAdvanced(Lineshape):
             # Fully vectorized calculation for all s values at once
             I = np.eye(n_channels)
             
-            # Create diagonal matrices for all s values: shape (n_channels, n_channels, s_len)
-            rho_diag = np.zeros((n_channels, n_channels, s_len), dtype=complex)
-            for i in range(n_channels):
-                rho_diag[i, i, :] = rho[i, :]
+            # Use np.diag to create diagonal matrices for all s values (n_channels, n_channels, s_len)
+            rho_diag = np.stack([np.diag(rho[:, i]) for i in range(s_len)], axis=-1)
             
             # Compute denominator matrices for all s values
             # I[:, :, None] broadcasts identity to (n_channels, n_channels, s_len)
@@ -277,7 +283,7 @@ class KMatrixAdvanced(Lineshape):
         P_i = sum_R (beta_R * g_Ri) / (m_R^2 - s)
         where beta_R are the production couplings and g_Ri are the decay couplings.
         """
-        np = config.backend
+        np = config.backend  # Get backend dynamically
         s_len = len(s)
         
         # Convert to arrays for vectorized operations
@@ -290,7 +296,7 @@ class KMatrixAdvanced(Lineshape):
         # pole_masses: (n_poles,) -> (n_poles, 1) for broadcasting with s
         # s: (s_len,) -> (1, s_len) for broadcasting with pole_masses
         # Result denominator: (n_poles, s_len)
-        denominators = -pole_masses[:, None]**2 + s[None, :]  # (n_poles, s_len)
+        denominators = pole_masses[:, None]**2 - s[None, :]  # (n_poles, s_len)
         
         # Handle the case where s equals a pole mass (add small epsilon)
         epsilon = 1e-10
@@ -319,13 +325,15 @@ class KMatrixAdvanced(Lineshape):
         F = (I - i*T*rho)^(-1) * P
         where T is the T-matrix, rho is the phase space factor, and P is the P-vector.
         """
-        np = config.backend
+        np = config.backend  # Get backend dynamically
         s_len = len(s)
         
         # Calculate phase space factors for each channel (vectorized)
-        rho = np.zeros((n_channels, s_len), dtype=complex)
-        for i, channel in enumerate(self.channels.value):
-            rho[i] = channel.phase_space_factor(s)
+        rho_list = []
+        for channel in self.channels.value:
+            val = channel.phase_space_factor(s)
+            rho_list.append(val)
+        rho = np.stack(rho_list, axis=0)
         
         # Build F-vector: F = (I - i*T*rho)^(-1) * P
         if n_channels == 1:
@@ -337,9 +345,7 @@ class KMatrixAdvanced(Lineshape):
             I = np.eye(n_channels)
             
             # Create diagonal matrices for all s values: shape (n_channels, n_channels, s_len)
-            rho_diag = np.zeros((n_channels, n_channels, s_len), dtype=complex)
-            for i in range(n_channels):
-                rho_diag[i, i, :] = rho[i, :]
+            rho_diag = np.stack([np.diag(rho[:, i]) for i in range(s_len)], axis=-1)
             
             # Compute denominator matrices for all s values
             # I[:, :, None] broadcasts identity to (n_channels, n_channels, s_len)

@@ -6,7 +6,7 @@ commonly used in amplitude analysis.
 """
 
 from typing import Union, Any
-from .config import config
+from decayshape import config
 
 
 def blatt_weiskopf_form_factor(q: Union[float, Any], q0: Union[float, Any], 
@@ -26,7 +26,7 @@ def blatt_weiskopf_form_factor(q: Union[float, Any], q0: Union[float, Any],
     Returns:
         Blatt-Weiskopf form factor
     """
-    np = config.backend
+    np = config.backend  # Get backend dynamically
     
     if L == 0:
         return np.ones_like(q)
@@ -63,7 +63,7 @@ def angular_momentum_barrier_factor(q: Union[float, Any], q0: Union[float, Any],
     Returns:
         Angular momentum barrier factor
     """
-    np = config.backend
+    np = config.backend  # Get backend dynamically
     
     if L == 0:
         return np.ones_like(q)
@@ -85,7 +85,7 @@ def relativistic_breit_wigner_denominator(s: Union[float, Any],
     Returns:
         Denominator of the Breit-Wigner
     """
-    np = config.backend
+    np = config.backend  # Get backend dynamically
     return s - mass**2 + 1j * mass * width
 
 

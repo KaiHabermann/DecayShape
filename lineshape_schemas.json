@@ -1,0 +1,295 @@
+{
+  "RelativisticBreitWigner": {
+    "lineshape_type": "RelativisticBreitWigner",
+    "description": "Relativistic Breit-Wigner lineshape.\n    \n    The most common lineshape for hadron resonances, accounting for\n    the finite width and relativistic effects.",
+    "fixed_parameters": {},
+    "optimization_parameters": {
+      "pole_mass": {
+        "type": "number",
+        "description": "Pole mass of the resonance",
+        "default": 0.775,
+        "constraints": {}
+      },
+      "width": {
+        "type": "number",
+        "description": "Resonance width",
+        "default": 0.15,
+        "constraints": {}
+      },
+      "r": {
+        "type": "number",
+        "description": "Hadron radius parameter for Blatt-Weiskopf form factor",
+        "default": 1.0,
+        "constraints": {}
+      },
+      "L": {
+        "type": "integer",
+        "description": "Angular momentum of the decay",
+        "default": 0,
+        "constraints": {}
+      },
+      "q0": {
+        "type": "number",
+        "description": "Reference momentum (calculated from pole_mass if None)",
+        "constraints": {}
+      }
+    },
+    "parameter_order": [
+      "pole_mass",
+      "width",
+      "r",
+      "L",
+      "q0"
+    ],
+    "current_values": {
+      "pole_mass": 0.775,
+      "width": 0.15,
+      "r": 1.0,
+      "L": 0,
+      "q0": 0.3875
+    }
+  },
+  "Flatte": {
+    "lineshape_type": "Flatte",
+    "description": "Flatté lineshape for coupled-channel resonances.\n    \n    Used for resonances that can decay into multiple channels,\n    such as the f0(980) which couples to both ππ and KK.",
+    "fixed_parameters": {
+      "channel1_mass1": {
+        "type": "object",
+        "description": "",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "channel1_mass2": {
+        "type": "object",
+        "description": "",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "channel2_mass1": {
+        "type": "object",
+        "description": "",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "channel2_mass2": {
+        "type": "object",
+        "description": "",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      }
+    },
+    "optimization_parameters": {
+      "pole_mass": {
+        "type": "number",
+        "description": "Pole mass of the resonance",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "width1": {
+        "type": "number",
+        "description": "Width for first channel",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "width2": {
+        "type": "number",
+        "description": "Width for second channel",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "r1": {
+        "type": "number",
+        "description": "Hadron radius for first channel",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "r2": {
+        "type": "number",
+        "description": "Hadron radius for second channel",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "L1": {
+        "type": "integer",
+        "description": "Angular momentum for first channel",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "L2": {
+        "type": "integer",
+        "description": "Angular momentum for second channel",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "q01": {
+        "type": "number",
+        "description": "Reference momentum for first channel",
+        "constraints": {}
+      },
+      "q02": {
+        "type": "number",
+        "description": "Reference momentum for second channel",
+        "constraints": {}
+      }
+    },
+    "parameter_order": [
+      "pole_mass",
+      "width1",
+      "width2",
+      "r1",
+      "r2",
+      "L1",
+      "L2",
+      "q01",
+      "q02"
+    ],
+    "current_values": {
+      "channel1_mass1": 0.139,
+      "channel1_mass2": 0.139,
+      "channel2_mass1": 0.494,
+      "channel2_mass2": 0.494,
+      "pole_mass": 0.98,
+      "width1": 1.0,
+      "width2": 0.5,
+      "r1": 1.0,
+      "r2": 1.0,
+      "L1": 0,
+      "L2": 0,
+      "q01": 0.49,
+      "q02": 0.49
+    }
+  },
+  "KMatrixAdvanced": {
+    "lineshape_type": "KMatrixAdvanced",
+    "description": "Advanced K-matrix lineshape using poles and channels.\n    \n    This implementation allows for multiple poles and channels,\n    making it suitable for complex coupled-channel analysis.",
+    "fixed_parameters": {
+      "channels": {
+        "type": "object",
+        "description": "List of decay channels",
+        "default": "PydanticUndefined",
+        "constraints": {}
+      },
+      "output_channel": {
+        "type": "object",
+        "description": "Which channel of the F-vector to return (0-indexed)",
+        "default": {
+          "value": 0
+        },
+        "constraints": {}
+      }
+    },
+    "optimization_parameters": {
+      "pole_masses": {
+        "type": "array",
+        "description": "List of pole masses",
+        "default": "PydanticUndefined",
+        "constraints": {},
+        "items": {
+          "type": "number"
+        }
+      },
+      "production_couplings": {
+        "type": "array",
+        "description": "Production couplings from initial state to each pole (length = n_poles)",
+        "default": "PydanticUndefined",
+        "constraints": {},
+        "items": {
+          "type": "number"
+        }
+      },
+      "decay_couplings": {
+        "type": "array",
+        "description": "Decay couplings from each pole to each channel (length = n_poles × n_channels)",
+        "default": "PydanticUndefined",
+        "constraints": {},
+        "items": {
+          "type": "number"
+        }
+      },
+      "r": {
+        "type": "number",
+        "description": "Hadron radius parameter",
+        "default": 1.0,
+        "constraints": {}
+      },
+      "L": {
+        "type": "integer",
+        "description": "Angular momentum of the decay",
+        "default": 0,
+        "constraints": {}
+      },
+      "q0": {
+        "type": "number",
+        "description": "Reference momentum",
+        "constraints": {}
+      }
+    },
+    "parameter_order": [
+      "pole_mass_0",
+      "pole_mass_1",
+      "production_coupling_0",
+      "production_coupling_1",
+      "decay_coupling_0_0",
+      "decay_coupling_0_1",
+      "decay_coupling_1_0",
+      "decay_coupling_1_1",
+      "r",
+      "L",
+      "q0"
+    ],
+    "current_values": {
+      "channels": [
+        {
+          "particle1": {
+            "value": {
+              "mass": 0.13957,
+              "spin": 0.0,
+              "parity": -1
+            }
+          },
+          "particle2": {
+            "value": {
+              "mass": 0.13957,
+              "spin": 0.0,
+              "parity": -1
+            }
+          }
+        },
+        {
+          "particle1": {
+            "value": {
+              "mass": 0.49368,
+              "spin": 0.0,
+              "parity": -1
+            }
+          },
+          "particle2": {
+            "value": {
+              "mass": 0.49368,
+              "spin": 0.0,
+              "parity": -1
+            }
+          }
+        }
+      ],
+      "output_channel": 0,
+      "pole_masses": [
+        0.775,
+        0.98
+      ],
+      "production_couplings": [
+        1.0,
+        0.8
+      ],
+      "decay_couplings": [
+        1.0,
+        0.5,
+        0.3,
+        0.7
+      ],
+      "r": 1.0,
+      "L": 0,
+      "q0": 0.3875
+    }
+  }
+}

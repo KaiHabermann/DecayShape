@@ -10,16 +10,17 @@ Results are timed, reported, and plotted for analysis.
 """
 
 import time
-import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from itertools import product
 import sys
 import os
+import numpy as np
 
 # Add the parent directory to the path so we can import decayshape
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from decayshape import config, set_backend
+set_backend("numpy")
 from decayshape.kmatrix_advanced import KMatrixAdvanced
 from decayshape.particles import Channel, CommonParticles
 
@@ -77,12 +78,26 @@ def benchmark_kmatrix(array_length, n_channels, n_poles, n_runs=5):
     # Create s values
     s_values = np.linspace(0.1, 4.0, array_length)
     
-    # Create K-matrix
-    kmat = create_kmatrix(s_values, n_channels, n_poles)
-    
-    # Warm-up run
-    _ = kmat()
-    
+
+
+
+    if config.backend_name == "jax":
+        import jax
+
+        kmat_object = create_kmatrix(s_values, n_channels, n_poles)
+        fun = kmat_object.function
+        kmat_jitted = jax.jit(fun)
+        kmat_jitted(s_values[:1])
+        kmat = lambda *args, **kwargs: kmat_jitted(s_values, *args, **kwargs)
+        # kmat = jax.jit(lambda *args, **kwargs: kmat_object(*args, **kwargs))
+    else:
+        # Create K-matrix
+        kmat_object = create_kmatrix(s_values, n_channels, n_poles)
+        kmat = kmat_object
+
+    # # Warm-up run
+    # _ = kmat()
+
     # Timed runs
     times = []
     for _ in range(n_runs):
@@ -142,18 +157,8 @@ def run_full_benchmark():
             results.append(result)
             print(f"{result['mean_time']*1000:.2f} ms")
         except Exception as e:
+            raise e
             print(f"FAILED: {e}")
-            # Still add a result with NaN for failed cases
-            results.append({
-                'array_length': array_length,
-                'n_channels': n_channels,
-                'n_poles': n_poles,
-                'mean_time': np.nan,
-                'std_time': np.nan,
-                'min_time': np.nan,
-                'result_shape': None,
-                'result_dtype': None
-            })
     
     return pd.DataFrame(results)
 
