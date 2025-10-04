@@ -22,7 +22,9 @@ class TestJsonSchemaMixinParticle:
         assert schema["model_type"] == "Particle"
         assert "description" in schema
         assert "parameters" in schema
-        assert "current_values" in schema
+
+        # Should not have current_values
+        assert "current_values" not in schema
 
         # Check parameters
         params = schema["parameters"]
@@ -30,11 +32,10 @@ class TestJsonSchemaMixinParticle:
         assert "spin" in params
         assert "parity" in params
 
-        # Check current values
-        values = schema["current_values"]
-        assert values["mass"] == pion.mass
-        assert values["spin"] == pion.spin
-        assert values["parity"] == pion.parity
+        # Check parameter structure
+        assert params["mass"]["type"] == "number"
+        assert params["spin"]["type"] == "number"
+        assert params["parity"]["type"] == "integer"
 
     def test_particle_to_json_string(self):
         """Test that Particle can generate JSON string."""
@@ -44,7 +45,8 @@ class TestJsonSchemaMixinParticle:
         # Should be valid JSON
         parsed = json.loads(json_str)
         assert parsed["model_type"] == "Particle"
-        assert parsed["current_values"]["mass"] == kaon.mass
+        assert "parameters" in parsed
+        assert "current_values" not in parsed
 
 
 class TestJsonSchemaMixinChannel:
@@ -63,17 +65,24 @@ class TestJsonSchemaMixinChannel:
         assert schema["model_type"] == "Channel"
         assert "description" in schema
         assert "fixed_parameters" in schema
-        assert "current_values" in schema
+
+        # Should not have current_values
+        assert "current_values" not in schema
 
         # Check fixed parameters
         fixed = schema["fixed_parameters"]
         assert "particle1" in fixed
         assert "particle2" in fixed
 
-        # Check that particle values are included
-        values = schema["current_values"]
-        assert "particle1" in values
-        assert "particle2" in values
+        # Check that nested schemas are included
+        assert "schema" in fixed["particle1"]
+        assert "schema" in fixed["particle2"]
+
+        # Check nested Particle schema
+        particle_schema = fixed["particle1"]["schema"]
+        assert "mass" in particle_schema
+        assert "spin" in particle_schema
+        assert "parity" in particle_schema
 
     def test_channel_to_json_string(self):
         """Test that Channel can generate JSON string."""
@@ -112,17 +121,23 @@ class TestJsonSchemaMixinLineshape:
         assert "lineshape_type" in schema
         assert schema["lineshape_type"] == "RelativisticBreitWigner"
         assert "optimization_parameters" in schema
-        assert "parameter_order" in schema
+
+        # Should not have parameter_order or current_values
+        assert "parameter_order" not in schema
+        assert "current_values" not in schema
 
         # Check that 's' is excluded
         assert "s" not in schema["optimization_parameters"]
         assert "s" not in schema["fixed_parameters"]
-        assert "s" not in schema["parameter_order"]
 
         # Check other parameters are present
         opt_params = schema["optimization_parameters"]
         assert "pole_mass" in opt_params
         assert "width" in opt_params
+
+        # Check parameter types
+        assert opt_params["pole_mass"]["type"] == "number"
+        assert opt_params["width"]["type"] == "number"
 
     def test_lineshape_to_json_string(self):
         """Test that Lineshape can generate JSON string."""
@@ -144,7 +159,9 @@ class TestJsonSchemaMixinLineshape:
         # Should be valid JSON
         parsed = json.loads(json_str)
         assert parsed["lineshape_type"] == "RelativisticBreitWigner"
-        assert "s" not in parsed["parameter_order"]
+        assert "parameter_order" not in parsed
+        assert "current_values" not in parsed
+        assert "s" not in parsed["optimization_parameters"]
 
     def test_lineshape_exclude_additional_fields(self):
         """Test excluding additional fields from schema."""
