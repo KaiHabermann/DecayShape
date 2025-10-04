@@ -6,7 +6,7 @@ for amplitude or partial wave analysis, with support for both numpy and
 JAX backends.
 """
 
-from .base import FixedParam
+from .base import FixedParam, JsonSchemaMixin
 from .config import config, set_backend
 from .kmatrix_advanced import KMatrixAdvanced
 from .lineshapes import Flatte, RelativisticBreitWigner
@@ -25,6 +25,7 @@ __all__ = [
     "config",
     "set_backend",
     "FixedParam",
+    "JsonSchemaMixin",
     "RelativisticBreitWigner",
     "Flatte",
     "Particle",

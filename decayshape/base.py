@@ -16,6 +16,278 @@ from .config import config
 T = TypeVar("T")
 
 
+class JsonSchemaMixin:
+    """
+    Mixin class that provides JSON schema generation for Pydantic models.
+
+    This can be mixed into any Pydantic BaseModel to add to_json_schema() and
+    to_json_string() methods for frontend consumption.
+    """
+
+    def to_json_schema(self, exclude_fields: Optional[list[str]] = None) -> dict[str, Any]:
+        """
+        Generate a JSON schema representation of the model for frontend use.
+
+        Args:
+            exclude_fields: List of field names to exclude from the schema
+
+        Returns:
+            Dictionary containing the model structure, parameters, and metadata
+        """
+        if exclude_fields is None:
+            exclude_fields = []
+
+        # Get the class name and description
+        class_name = self.__class__.__name__
+        class_doc = self.__class__.__doc__ or ""
+
+        # Get model fields information
+        model_fields = self.__class__.model_fields
+
+        # Separate fixed and regular parameters
+        fixed_params = {}
+        regular_params = {}
+
+        for field_name, field_info in model_fields.items():
+            # Skip excluded fields
+            if field_name in exclude_fields:
+                continue
+
+            # Extract field information
+            field_type = field_info.annotation
+            field_description = field_info.description or ""
+            field_default = field_info.default if field_info.default is not ... else None
+
+            # Determine if this is a FixedParam field and get inner type
+            inner_type = self._extract_fixedparam_inner_type(field_type)
+            is_fixed_param = inner_type is not None
+
+            # Convert type to JSON-serializable format
+            type_info = self._type_to_json_info(inner_type if is_fixed_param else field_type)
+
+            # Create parameter info
+            param_info = {
+                "type": type_info["type"],
+                "description": field_description,
+                "default": self._serialize_default_value(field_default),
+                "constraints": type_info.get("constraints", {}),
+                "items": type_info.get("items"),  # For arrays/lists
+                "properties": type_info.get("properties"),  # For objects
+                "schema": type_info.get("schema"),  # For nested models with JsonSchemaMixin
+                "class": type_info.get("class"),  # Class name for object types
+                "item_schema": type_info.get("item_schema"),  # Schema for array items
+            }
+
+            # Remove None values to keep JSON clean
+            param_info = {k: v for k, v in param_info.items() if v is not None}
+
+            # Add to appropriate category
+            if is_fixed_param:
+                fixed_params[field_name] = param_info
+            else:
+                regular_params[field_name] = param_info
+
+        # Build the complete schema
+        schema = {
+            "model_type": class_name,
+            "description": class_doc.strip(),
+            "fixed_parameters": fixed_params,
+            "parameters": regular_params,
+        }
+
+        return schema
+
+    def _type_to_json_info(self, type_hint) -> dict[str, Any]:
+        """Convert Python type hints to JSON schema type information."""
+        if type_hint is None or type_hint is type(None):
+            return {"type": "null"}
+        elif type_hint is int:
+            return {"type": "integer"}
+        elif type_hint is float:
+            return {"type": "number"}
+        elif type_hint is str:
+            return {"type": "string"}
+        elif type_hint is bool:
+            return {"type": "boolean"}
+        elif type_hint is list:
+            return {"type": "array"}
+        elif type_hint is dict:
+            return {"type": "object"}
+
+        # Handle generic types
+        origin = get_origin(type_hint)
+        args = get_args(type_hint)
+
+        if origin is list:
+            item_type = args[0] if args else Any
+            item_info = self._type_to_json_info(item_type)
+            result = {"type": "array"}
+
+            # Simplify items info - just include the basic type info
+            items_dict = {"type": item_info["type"]}
+            if "class" in item_info:
+                items_dict["class"] = item_info["class"]
+            result["items"] = items_dict
+
+            # If the item has a nested schema, include it separately
+            if "schema" in item_info:
+                result["item_schema"] = item_info["schema"]
+
+            return result
+        elif origin is dict:
+            return {"type": "object"}
+        elif origin is Union:
+            # Handle Union types (like Optional)
+            non_none_types = [arg for arg in args if arg is not type(None)]
+            if len(non_none_types) == 1:
+                return self._type_to_json_info(non_none_types[0])
+            else:
+                return {"type": "union", "anyOf": [self._type_to_json_info(arg) for arg in non_none_types]}
+
+        # Handle custom classes that have JsonSchemaMixin
+        if isinstance(type_hint, type) and hasattr(type_hint, "__mro__"):
+            # Check if this class has JsonSchemaMixin
+            if any(base.__name__ == "JsonSchemaMixin" for base in type_hint.__mro__):
+                # Create a temporary instance to get the schema structure
+                # We'll get the field structure without instantiating
+                try:
+                    # Get the model fields directly from the class
+                    if hasattr(type_hint, "model_fields"):
+                        nested_schema = self._generate_nested_schema(type_hint)
+                        return {"type": "object", "class": type_hint.__name__, "schema": nested_schema}
+                except Exception:
+                    pass
+
+            # For classes without the mixin, just return basic info
+            if hasattr(type_hint, "__name__"):
+                return {"type": "object", "class": type_hint.__name__}
+
+        # Fallback
+        return {"type": "any"}
+
+    def _extract_fixedparam_inner_type(self, field_type):
+        """
+        Extract the inner type from a FixedParam field.
+
+        Handles both standard typing and Pydantic's generic metadata.
+        """
+        # First try Pydantic's generic metadata
+        if hasattr(field_type, "__pydantic_generic_metadata__"):
+            metadata = field_type.__pydantic_generic_metadata__
+            if metadata.get("origin") is FixedParam and metadata.get("args"):
+                return metadata["args"][0]
+
+        # Fall back to standard typing
+        origin = get_origin(field_type)
+        args = get_args(field_type)
+
+        if origin is Union:
+            # Handle Optional[FixedParam[...]]
+            for arg in args:
+                arg_origin = get_origin(arg)
+                if arg_origin is FixedParam:
+                    arg_args = get_args(arg)
+                    return arg_args[0] if arg_args else Any
+                # Check if arg itself is a FixedParam subclass with Pydantic metadata
+                if hasattr(arg, "__pydantic_generic_metadata__"):
+                    metadata = arg.__pydantic_generic_metadata__
+                    if metadata.get("origin") is FixedParam and metadata.get("args"):
+                        return metadata["args"][0]
+        elif origin is FixedParam:
+            return args[0] if args else Any
+        elif isinstance(field_type, type) and issubclass(field_type, FixedParam):
+            return Any
+
+        return None
+
+    def _generate_nested_schema(self, model_class) -> dict[str, Any]:
+        """Generate a nested schema for a model class that has JsonSchemaMixin."""
+        if not hasattr(model_class, "model_fields"):
+            return {}
+
+        model_fields = model_class.model_fields
+        schema_fields = {}
+
+        for field_name, field_info in model_fields.items():
+            field_type = field_info.annotation
+            field_description = field_info.description or ""
+
+            # Determine if this is a FixedParam field and get inner type
+            inner_type = self._extract_fixedparam_inner_type(field_type)
+            is_fixed_param = inner_type is not None
+
+            # Get type info for the appropriate type
+            type_info = self._type_to_json_info(inner_type if is_fixed_param else field_type)
+
+            field_schema = {
+                "type": type_info["type"],
+                "description": field_description,
+            }
+
+            # Add nested schema if present
+            if "schema" in type_info:
+                field_schema["schema"] = type_info["schema"]
+            if "item_schema" in type_info:
+                field_schema["item_schema"] = type_info["item_schema"]
+            if "items" in type_info:
+                field_schema["items"] = type_info["items"]
+            if "class" in type_info:
+                field_schema["class"] = type_info["class"]
+
+            schema_fields[field_name] = field_schema
+
+        return schema_fields
+
+    def _serialize_default_value(self, value):
+        """Serialize default values to JSON-compatible format."""
+        if value is None or value is ...:
+            return None
+        elif isinstance(value, (int, float, str, bool)):
+            return value
+        elif isinstance(value, list):
+            return [self._serialize_default_value(item) for item in value]
+        elif isinstance(value, dict):
+            return {k: self._serialize_default_value(v) for k, v in value.items()}
+        elif hasattr(value, "model_dump"):
+            # Pydantic model
+            return value.model_dump()
+        else:
+            # Try to convert to string representation
+            return str(value)
+
+    def _get_current_values(self, exclude_fields: Optional[list[str]] = None) -> dict[str, Any]:
+        """Get current parameter values."""
+        if exclude_fields is None:
+            exclude_fields = []
+
+        current_values = {}
+
+        # Get parameters
+        for field_name, field_value in self.__dict__.items():
+            if field_name in exclude_fields:
+                continue
+            if isinstance(field_value, FixedParam):
+                current_values[field_name] = self._serialize_default_value(field_value.value)
+            else:
+                current_values[field_name] = self._serialize_default_value(field_value)
+
+        return current_values
+
+    def to_json_string(self, indent: Optional[int] = 2, exclude_fields: Optional[list[str]] = None) -> str:
+        """
+        Generate a JSON string representation of the model schema.
+
+        Args:
+            indent: Number of spaces for indentation (None for compact)
+            exclude_fields: List of field names to exclude from the schema
+
+        Returns:
+            JSON string representation
+        """
+        schema = self.to_json_schema(exclude_fields=exclude_fields)
+        return json.dumps(schema, indent=indent, ensure_ascii=False)
+
+
 class FixedParam(BaseModel, Generic[T]):
     """Pydantic model for marking fixed parameters that don't change during optimization."""
 
@@ -109,7 +381,7 @@ class LineshapeBase(BaseModel):
         return values
 
 
-class Lineshape(LineshapeBase, ABC):
+class Lineshape(LineshapeBase, JsonSchemaMixin, ABC):
     """
     Abstract base class for all lineshapes using Pydantic.
 
@@ -196,170 +468,29 @@ class Lineshape(LineshapeBase, ABC):
             Lineshape value(s) at the s values from construction
         """
 
-    def to_json_schema(self) -> dict[str, Any]:
+    def to_json_schema(self, exclude_fields: Optional[list[str]] = None) -> dict[str, Any]:
         """
         Generate a JSON schema representation of the lineshape for frontend use.
 
         This excludes the 's' parameter as it will not be set in the frontend.
 
+        Args:
+            exclude_fields: Additional field names to exclude (s is always excluded)
+
         Returns:
             Dictionary containing the lineshape structure, parameters, and metadata
         """
-        # Get the class name and description
-        class_name = self.__class__.__name__
-        class_doc = self.__class__.__doc__ or ""
+        if exclude_fields is None:
+            exclude_fields = []
 
-        # Get model fields information
-        model_fields = self.model_fields
+        # Always exclude 's' for lineshapes
+        exclude_fields = list(exclude_fields) + ["s"]
 
-        # Separate fixed and optimization parameters
-        fixed_params = {}
-        optimization_params = {}
+        # Use the mixin's base implementation
+        schema = super().to_json_schema(exclude_fields=exclude_fields)
 
-        for field_name, field_info in model_fields.items():
-            # Skip the 's' parameter as requested
-            if field_name == "s":
-                continue
-
-            # Extract field information
-            field_type = field_info.annotation
-            field_description = field_info.description or ""
-            field_default = field_info.default if field_info.default is not ... else None
-
-            # Determine if this is a FixedParam field
-            is_fixed_param = False
-            inner_type = None
-
-            # Check for FixedParam types
-            if hasattr(field_type, "__origin__") and field_type.__origin__ is not None:
-                origin = get_origin(field_type)
-                if origin is FixedParam:
-                    is_fixed_param = True
-                    args = get_args(field_type)
-                    inner_type = args[0] if args else Any
-            elif isinstance(field_type, type) and issubclass(field_type, FixedParam):
-                is_fixed_param = True
-                inner_type = Any
-
-            # Convert type to JSON-serializable format
-            type_info = self._type_to_json_info(inner_type if is_fixed_param else field_type)
-
-            # Create parameter info
-            param_info = {
-                "type": type_info["type"],
-                "description": field_description,
-                "default": self._serialize_default_value(field_default),
-                "constraints": type_info.get("constraints", {}),
-                "items": type_info.get("items"),  # For arrays/lists
-                "properties": type_info.get("properties"),  # For objects
-            }
-
-            # Remove None values to keep JSON clean
-            param_info = {k: v for k, v in param_info.items() if v is not None}
-
-            # Add to appropriate category
-            if is_fixed_param:
-                fixed_params[field_name] = param_info
-            else:
-                optimization_params[field_name] = param_info
-
-        # Get parameter order for optimization parameters
-        param_order = [p for p in self.parameter_order if p != "s"]
-
-        # Build the complete schema
-        schema = {
-            "lineshape_type": class_name,
-            "description": class_doc.strip(),
-            "fixed_parameters": fixed_params,
-            "optimization_parameters": optimization_params,
-            "parameter_order": param_order,
-            "current_values": self._get_current_values(),
-        }
+        # Customize the schema for lineshapes
+        schema["lineshape_type"] = schema.pop("model_type")
+        schema["optimization_parameters"] = schema.pop("parameters")
 
         return schema
-
-    def _type_to_json_info(self, type_hint) -> dict[str, Any]:
-        """Convert Python type hints to JSON schema type information."""
-        if type_hint is None or type_hint is type(None):
-            return {"type": "null"}
-        elif type_hint is int:
-            return {"type": "integer"}
-        elif type_hint is float:
-            return {"type": "number"}
-        elif type_hint is str:
-            return {"type": "string"}
-        elif type_hint is bool:
-            return {"type": "boolean"}
-        elif type_hint is list or type_hint is list:
-            return {"type": "array"}
-        elif type_hint is dict or type_hint is dict:
-            return {"type": "object"}
-
-        # Handle generic types
-        origin = get_origin(type_hint)
-        args = get_args(type_hint)
-
-        if origin is list or origin is list:
-            item_type = args[0] if args else Any
-            return {"type": "array", "items": self._type_to_json_info(item_type)}
-        elif origin is dict or origin is dict:
-            return {"type": "object"}
-        elif origin is Union:
-            # Handle Union types (like Optional)
-            non_none_types = [arg for arg in args if arg is not type(None)]
-            if len(non_none_types) == 1:
-                return self._type_to_json_info(non_none_types[0])
-            else:
-                return {"type": "union", "anyOf": [self._type_to_json_info(arg) for arg in non_none_types]}
-
-        # Handle custom classes
-        if hasattr(type_hint, "__name__"):
-            return {"type": "object", "class": type_hint.__name__}
-
-        # Fallback
-        return {"type": "any"}
-
-    def _serialize_default_value(self, value):
-        """Serialize default values to JSON-compatible format."""
-        if value is None or value is ...:
-            return None
-        elif isinstance(value, (int, float, str, bool)):
-            return value
-        elif isinstance(value, list):
-            return [self._serialize_default_value(item) for item in value]
-        elif isinstance(value, dict):
-            return {k: self._serialize_default_value(v) for k, v in value.items()}
-        elif hasattr(value, "model_dump"):
-            # Pydantic model
-            return value.model_dump()
-        else:
-            # Try to convert to string representation
-            return str(value)
-
-    def _get_current_values(self) -> dict[str, Any]:
-        """Get current parameter values (excluding 's')."""
-        current_values = {}
-
-        # Get fixed parameters
-        for field_name, field_value in self.__dict__.items():
-            if field_name == "s":
-                continue
-            if isinstance(field_value, FixedParam):
-                current_values[field_name] = self._serialize_default_value(field_value.value)
-            else:
-                current_values[field_name] = self._serialize_default_value(field_value)
-
-        return current_values
-
-    def to_json_string(self, indent: Optional[int] = 2) -> str:
-        """
-        Generate a JSON string representation of the lineshape schema.
-
-        Args:
-            indent: Number of spaces for indentation (None for compact)
-
-        Returns:
-            JSON string representation
-        """
-        schema = self.to_json_schema()
-        return json.dumps(schema, indent=indent, ensure_ascii=False)

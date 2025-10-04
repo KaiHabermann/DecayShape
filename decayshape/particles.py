@@ -8,11 +8,11 @@ from typing import Any, Union
 
 from pydantic import BaseModel, Field, model_validator
 
-from .base import FixedParam
+from .base import FixedParam, JsonSchemaMixin
 from .config import config
 
 
-class Particle(BaseModel):
+class Particle(BaseModel, JsonSchemaMixin):
     """
     A particle with mass, spin, and parity quantum numbers.
 
@@ -37,7 +37,7 @@ class Particle(BaseModel):
         return f"m={self.mass:.3f}, J={self.spin}{parity_str}"
 
 
-class Channel(BaseModel):
+class Channel(BaseModel, JsonSchemaMixin):
     """
     A decay channel with two particles.
 
