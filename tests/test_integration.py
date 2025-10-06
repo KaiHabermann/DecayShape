@@ -18,10 +18,10 @@ class TestBasicWorkflow:
         s_values = np.linspace(0.3, 1.2, 100)
 
         # Create Breit-Wigner
-        rho = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0, L=1)
+        rho = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
         # Evaluate
-        amplitude = rho()
+        amplitude = rho(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Check results
         assert isinstance(amplitude, np.ndarray)
@@ -41,14 +41,14 @@ class TestBasicWorkflow:
         s_values = np.linspace(0.5, 1.0, 50)
 
         # Create lineshape
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0, L=1)
+        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
         # Test different parameter combinations (simulating optimization)
         test_params = [{"width": 0.1, "r": 0.8}, {"width": 0.2, "r": 1.2}, {"pole_mass": 0.8, "width": 0.15}]
 
         results = []
         for params in test_params:
-            result = bw(**params)
+            result = bw(1, 2, **params)  # spin=1 (1/2), angular_momentum=2 (L=1)
             results.append(result)
             assert isinstance(result, np.ndarray)
             assert result.shape == s_values.shape
@@ -78,7 +78,7 @@ class TestBasicWorkflow:
         )
 
         # Evaluate
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Check results
         assert isinstance(result, np.ndarray)
@@ -135,7 +135,7 @@ class TestFixedParamIntegration:
         assert bw.s[0] == s_values[0]
         np.testing.assert_array_equal(bw.s[1:], s_values[1:])
 
-        result = bw()
+        result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         assert isinstance(result, np.ndarray)
         assert result.shape == s_values.shape
 
@@ -144,7 +144,7 @@ class TestFixedParamIntegration:
         s_values = np.array([0.5, 0.6, 0.7])
 
         # Create complex object with FixedParam
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0, L=1)
+        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
         # Serialize
         data = bw.model_dump()
@@ -153,8 +153,8 @@ class TestFixedParamIntegration:
         bw_restored = RelativisticBreitWigner(**data)
         print(bw_restored.s.value)
         # Should work the same
-        result_original = bw()
-        result_restored = bw_restored(s=s_values)
+        result_original = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
+        result_restored = bw_restored(1, 2, s=s_values)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         np.testing.assert_array_almost_equal(result_original, result_restored)
 
@@ -174,7 +174,7 @@ class TestBackendIntegration:
         channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
 
         # All should work with numpy
-        bw_result = bw()
+        bw_result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         channel_momentum = channel.momentum(s_values)
 
         assert isinstance(bw_result, np.ndarray)
@@ -188,14 +188,14 @@ class TestBackendIntegration:
         s_numpy = np.array([0.5, 0.6, 0.7])
         bw = RelativisticBreitWigner(pole_mass=0.775, s=s_numpy, width=0.15)
 
-        result = bw()
+        result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         assert isinstance(result, np.ndarray)
 
         # Should handle different input types gracefully
         s_list = [0.5, 0.6, 0.7]
         bw_list = RelativisticBreitWigner(pole_mass=0.775, s=s_list, width=0.15)
 
-        result_list = bw_list()
+        result_list = bw_list(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         assert isinstance(result_list, np.ndarray)
 
 
@@ -232,7 +232,7 @@ class TestPerformance:
         # Should handle large arrays efficiently
         bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15)
 
-        result = bw()
+        result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == s_values.shape
@@ -247,7 +247,7 @@ class TestPerformance:
         # Multiple evaluations with different parameters
         results = []
         for width in [0.1, 0.15, 0.2, 0.25, 0.3]:
-            result = bw(width=width)
+            result = bw(1, 2, width=width)  # spin=1 (1/2), angular_momentum=2 (L=1)
             results.append(result)
             assert isinstance(result, np.ndarray)
 
@@ -269,13 +269,13 @@ class TestRealWorldScenarios:
         s_values = masses**2
 
         # Create multiple resonances
-        rho_770 = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0, L=1)
+        rho_770 = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
-        f0_980 = RelativisticBreitWigner(pole_mass=0.98, s=s_values, width=0.05, r=1.0, L=0)
+        f0_980 = RelativisticBreitWigner(pole_mass=0.98, s=s_values, width=0.05, r=1.0)
 
         # Evaluate amplitudes
-        amp_rho = rho_770()
-        amp_f0 = f0_980()
+        amp_rho = rho_770(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
+        amp_f0 = f0_980(1, 0)  # spin=1 (1/2), angular_momentum=0 (L=0)
 
         # Combine amplitudes (coherent sum)
         total_amp = 1.0 * amp_rho + 0.5 * amp_f0
@@ -319,8 +319,8 @@ class TestRealWorldScenarios:
         )
 
         # Evaluate both channels
-        amp_pipi = kmat_pipi()
-        amp_kk = kmat_kk()
+        amp_pipi = kmat_pipi(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
+        amp_kk = kmat_kk(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Check results
         assert isinstance(amp_pipi, np.ndarray)

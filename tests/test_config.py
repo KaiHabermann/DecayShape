@@ -80,7 +80,7 @@ class TestBackendSwitching:
         assert config.backend_name == "numpy"
 
         # Evaluation should work
-        result = bw()
+        result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         assert isinstance(result, np.ndarray)
 
         # Reset to original
@@ -148,7 +148,7 @@ class TestBackendCompatibility:
         s_vals = np.array([0.5, 0.6, 0.7])
         bw = RelativisticBreitWigner(pole_mass=0.775, s=s_vals, width=0.15)
 
-        result = bw()
+        result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == s_vals.shape
@@ -183,7 +183,7 @@ class TestBackendCompatibility:
         # Evaluate with numpy
         set_backend("numpy")
         bw_numpy = RelativisticBreitWigner(pole_mass=0.775, s=s_vals, width=0.15)
-        result_numpy = bw_numpy()
+        result_numpy = bw_numpy(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Results should be numpy arrays
         assert isinstance(result_numpy, np.ndarray)

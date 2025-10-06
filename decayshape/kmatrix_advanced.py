@@ -39,7 +39,6 @@ class KMatrixAdvanced(Lineshape):
         default_factory=list, description="Decay couplings from each pole to each channel (length = n_poles × n_channels)"
     )
     r: float = Field(default=1.0, description="Hadron radius parameter")
-    L: int = Field(default=0, description="Angular momentum of the decay")
     q0: float = Field(default=None, description="Reference momentum")
 
     class Config:
@@ -92,7 +91,7 @@ class KMatrixAdvanced(Lineshape):
                 params.append(f"decay_coupling_{pole_idx}_{channel_idx}")
 
         # Add other parameters
-        params.extend(["r", "L", "q0"])
+        params.extend(["r", "q0"])
 
         return params
 
@@ -149,15 +148,22 @@ class KMatrixAdvanced(Lineshape):
         params["decay_couplings"] = decay_couplings
 
         # Handle other parameters
-        for param_name in ["r", "L", "q0"]:
+        for param_name in ["r", "q0"]:
             if param_name in kwargs:
                 params[param_name] = kwargs[param_name]
 
         return params
 
-    def function(self, s, *args, **kwargs) -> Union[float, Any]:
+    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
         Evaluate the advanced K-matrix lineshape.
+
+        Args:
+            angular_momentum: Angular momentum parameter (doubled values: 0, 2, 4, ...)
+            spin: Spin parameter (doubled values: 1, 3, 5, ...)
+            s: Mandelstam variable s (mass squared) or array of s values
+            *args: Positional parameter overrides
+            **kwargs: Keyword parameter overrides
 
         Implements the K-matrix formalism as described in AmpForm documentation:
         1. Build full T-matrix for all channels
@@ -189,11 +195,11 @@ class KMatrixAdvanced(Lineshape):
             # Multi-channel: F_vector is 2D, return specified channel
             return F_vector[output_idx, :]
 
-    def __call__(self, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
-        return self.function(s_val, *args, **kwargs)
+        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
     def _build_t_matrix(
         self, params: dict[str, Any], s: Union[float, Any], n_poles: int, n_channels: int

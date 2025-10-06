@@ -29,25 +29,27 @@ class RelativisticBreitWigner(Lineshape):
     pole_mass: float = Field(default=0.775, description="Pole mass of the resonance")
     width: float = Field(default=0.15, description="Resonance width")
     r: float = Field(default=1.0, description="Hadron radius parameter for Blatt-Weiskopf form factor")
-    L: int = Field(default=0, description="Angular momentum of the decay")
     q0: Optional[float] = Field(default=None, description="Reference momentum (calculated from pole_mass if None)")
 
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
-        return ["pole_mass", "width", "r", "L", "q0"]
+        return ["pole_mass", "width", "r", "q0"]
 
     def model_post_init(self, __context):
         """Post-initialization to set q0 if not provided."""
         if self.q0 is None:
             self.q0 = self.pole_mass / 2.0
 
-    def function(self, s, *args, **kwargs) -> Union[float, Any]:
+    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
         Evaluate the Relativistic Breit-Wigner at given s values.
 
         Args:
-            *args: Positional parameter overrides (width, r, L, q0)
+            angular_momentum: Angular momentum parameter (doubled values: 0, 2, 4, ...)
+            spin: Spin parameter (doubled values: 1, 3, 5, ...)
+            s: Mandelstam variable s (mass squared) or array of s values
+            *args: Positional parameter overrides (width, r, q0)
             **kwargs: Keyword parameter overrides
 
         Returns:
@@ -61,23 +63,26 @@ class RelativisticBreitWigner(Lineshape):
         # Calculate momentum in the decay frame
         q = np.sqrt(s) / 2.0
 
+        # Convert doubled angular momentum to actual L value
+        L = angular_momentum // 2
+
         # Blatt-Weiskopf form factor
-        F = blatt_weiskopf_form_factor(q, params["q0"], params["r"], params["L"])
+        F = blatt_weiskopf_form_factor(q, params["q0"], params["r"], L)
 
         # Angular momentum barrier factor
-        B = angular_momentum_barrier_factor(q, params["q0"], params["L"])
+        B = angular_momentum_barrier_factor(q, params["q0"], L)
 
         # Breit-Wigner denominator (use optimization parameter pole_mass)
         denominator = relativistic_breit_wigner_denominator(s, params["pole_mass"], params["width"])
 
         return F * B / denominator
 
-    def __call__(self, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         # Resolve s: prefer call-time s, else field value
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
-        return self.function(s_val, *args, **kwargs)
+        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
 
 class Flatte(Lineshape):
@@ -100,15 +105,13 @@ class Flatte(Lineshape):
     width2: float = Field(description="Width for second channel")
     r1: float = Field(description="Hadron radius for first channel")
     r2: float = Field(description="Hadron radius for second channel")
-    L1: int = Field(description="Angular momentum for first channel")
-    L2: int = Field(description="Angular momentum for second channel")
     q01: Optional[float] = Field(default=None, description="Reference momentum for first channel")
     q02: Optional[float] = Field(default=None, description="Reference momentum for second channel")
 
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
-        return ["pole_mass", "width1", "width2", "r1", "r2", "L1", "L2", "q01", "q02"]
+        return ["pole_mass", "width1", "width2", "r1", "r2", "q01", "q02"]
 
     def model_post_init(self, __context):
         """Post-initialization to set q01, q02 if not provided."""
@@ -117,12 +120,15 @@ class Flatte(Lineshape):
         if self.q02 is None:
             self.q02 = self.pole_mass / 2.0
 
-    def function(self, s, *args, **kwargs) -> Union[float, Any]:
+    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
         Evaluate the Flatté lineshape at given s values.
 
         Args:
-            *args: Positional parameter overrides (width1, width2, r1, r2, L1, L2, q01, q02)
+            angular_momentum: Angular momentum parameter (doubled values: 0, 2, 4, ...)
+            spin: Spin parameter (doubled values: 1, 3, 5, ...)
+            s: Mandelstam variable s (mass squared) or array of s values
+            *args: Positional parameter overrides (width1, width2, r1, r2, q01, q02)
             **kwargs: Keyword parameter overrides
 
         Returns:
@@ -144,11 +150,14 @@ class Flatte(Lineshape):
         m2_2 = self.channel2_mass2.value
         q2 = np.sqrt((s - (m2_1 + m2_2) ** 2) * (s - (m2_1 - m2_2) ** 2)) / (2 * np.sqrt(s))
 
+        # Convert doubled angular momentum to actual L value
+        L = angular_momentum // 2
+
         # Form factors and barrier factors for both channels
-        F1 = blatt_weiskopf_form_factor(q1, params["q01"], params["r1"], params["L1"])
-        F2 = blatt_weiskopf_form_factor(q2, params["q02"], params["r2"], params["L2"])
-        B1 = angular_momentum_barrier_factor(q1, params["q01"], params["L1"])
-        B2 = angular_momentum_barrier_factor(q2, params["q02"], params["L2"])
+        F1 = blatt_weiskopf_form_factor(q1, params["q01"], params["r1"], L)
+        F2 = blatt_weiskopf_form_factor(q2, params["q02"], params["r2"], L)
+        B1 = angular_momentum_barrier_factor(q1, params["q01"], L)
+        B2 = angular_momentum_barrier_factor(q2, params["q02"], L)
 
         # Total width
         total_width = params["width1"] * F1 * B1 + params["width2"] * F2 * B2
@@ -158,8 +167,8 @@ class Flatte(Lineshape):
 
         return 1.0 / denominator
 
-    def __call__(self, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
-        return self.function(s_val, *args, **kwargs)
+        return self.function(angular_momentum, spin, s_val, *args, **kwargs)

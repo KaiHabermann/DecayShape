@@ -64,7 +64,7 @@ class TestKMatrixAdvanced:
             output_channel=0,
         )
 
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == sample_s_values.shape
@@ -84,7 +84,7 @@ class TestKMatrixAdvanced:
             output_channel=0,
         )
 
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == sample_s_values.shape
@@ -105,11 +105,11 @@ class TestKMatrixAdvanced:
 
         # Channel 0 (ππ)
         kmat_0 = KMatrixAdvanced(output_channel=FixedParam(value=0), **base_params)
-        result_0 = kmat_0()
+        result_0 = kmat_0(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Channel 1 (KK)
         kmat_1 = KMatrixAdvanced(output_channel=FixedParam(value=1), **base_params)
-        result_1 = kmat_1()
+        result_1 = kmat_1(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Results should be different for different channels
         assert not np.allclose(result_0, result_1)
@@ -131,7 +131,7 @@ class TestKMatrixAdvanced:
             output_channel=0,
         )
 
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Should show threshold effects
         assert np.all(np.isfinite(result))
@@ -161,10 +161,10 @@ class TestKMatrixAdvanced:
         )
 
         # Default evaluation
-        result_default = kmat()
+        result_default = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Override pole masses
-        result_override = kmat(pole_mass_0=0.8)
+        result_override = kmat(1, 2, pole_mass_0=0.8)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Results should be different
         assert not np.allclose(result_default, result_override)
@@ -184,7 +184,7 @@ class TestKMatrixAdvanced:
         )
 
         # Should work without errors
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         assert isinstance(result, np.ndarray)
         assert result.shape == sample_s_values.shape
 
@@ -206,7 +206,7 @@ class TestKMatrixPhysics:
             output_channel=0,
         )
 
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Above threshold, should have imaginary part (unitarity)
         threshold = pipi_channel.threshold
@@ -236,7 +236,7 @@ class TestKMatrixPhysics:
             output_channel=0,
         )
 
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Should handle complex s values
         assert isinstance(result, np.ndarray)
@@ -258,7 +258,7 @@ class TestKMatrixPhysics:
             output_channel=0,
         )
 
-        result = kmat()
+        result = kmat(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         magnitude = np.abs(result)
 
         # Find the peak
@@ -293,8 +293,8 @@ class TestKMatrixPhysics:
             output_channel=0,
         )
 
-        result_strong = kmat_strong()
-        result_weak = kmat_weak()
+        result_strong = kmat_strong(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
+        result_weak = kmat_weak(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Results should be different
         assert not np.allclose(result_strong, result_weak)

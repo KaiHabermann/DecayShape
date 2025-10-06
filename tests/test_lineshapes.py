@@ -15,19 +15,23 @@ class TestRelativisticBreitWigner:
 
     def test_create_breit_wigner(self, sample_s_values, rho_parameters):
         """Test creating a Breit-Wigner lineshape."""
-        bw = RelativisticBreitWigner(s=sample_s_values, **rho_parameters)
+        # Remove L from rho_parameters since it's no longer a field
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        bw = RelativisticBreitWigner(s=sample_s_values, **params)
 
         assert isinstance(bw.s, FixedParam)
         assert bw.pole_mass == rho_parameters["pole_mass"]
         assert bw.width == rho_parameters["width"]
         assert bw.r == rho_parameters["r"]
-        assert bw.L == rho_parameters["L"]
 
     def test_breit_wigner_evaluation(self, sample_s_values, rho_parameters):
         """Test evaluating Breit-Wigner lineshape."""
-        bw = RelativisticBreitWigner(s=sample_s_values, **rho_parameters)
+        # Remove L from rho_parameters since it's no longer a field
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        bw = RelativisticBreitWigner(s=sample_s_values, **params)
 
-        result = bw()
+        # Now need to provide spin and angular_momentum as positional arguments
+        result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == sample_s_values.shape
@@ -35,27 +39,29 @@ class TestRelativisticBreitWigner:
 
     def test_breit_wigner_parameter_override(self, sample_s_values, rho_parameters):
         """Test parameter override in Breit-Wigner."""
-        bw = RelativisticBreitWigner(s=sample_s_values, **rho_parameters)
+        # Remove L from rho_parameters since it's no longer a field
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        bw = RelativisticBreitWigner(s=sample_s_values, **params)
 
         # Evaluate with default parameters
-        result_default = bw()
+        result_default = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Evaluate with overridden width
         new_width = 0.2
-        result_override = bw(width=new_width)
+        result_override = bw(1, 2, width=new_width)
 
         # Results should be different
         assert not np.allclose(result_default, result_override)
 
         # Test positional arguments
-        result_positional = bw(rho_parameters["pole_mass"], new_width)
+        result_positional = bw(1, 2, rho_parameters["pole_mass"], new_width)
         assert np.allclose(result_override, result_positional)
 
     def test_breit_wigner_parameter_order(self, sample_s_values):
         """Test parameter order property."""
         bw = RelativisticBreitWigner(s=sample_s_values, pole_mass=0.775, width=0.15)
 
-        expected_order = ["pole_mass", "width", "r", "L", "q0"]
+        expected_order = ["pole_mass", "width", "r", "q0"]
         assert bw.parameter_order == expected_order
 
     def test_breit_wigner_resonance_behavior(self):
@@ -64,9 +70,9 @@ class TestRelativisticBreitWigner:
         pole_mass = 0.775
         s_values = np.linspace(0.4, 1.2, 100)
 
-        bw = RelativisticBreitWigner(s=s_values, pole_mass=pole_mass, width=0.15, r=1.0, L=1)
+        bw = RelativisticBreitWigner(s=s_values, pole_mass=pole_mass, width=0.15, r=1.0)
 
-        result = bw()
+        result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         magnitude = np.abs(result)
 
         # Find the peak
@@ -78,15 +84,15 @@ class TestRelativisticBreitWigner:
 
     def test_breit_wigner_width_effect(self, sample_s_values):
         """Test effect of width parameter."""
-        base_params = {"pole_mass": 0.775, "r": 1.0, "L": 1}
+        base_params = {"pole_mass": 0.775, "r": 1.0}
 
         # Narrow resonance
         bw_narrow = RelativisticBreitWigner(s=sample_s_values, width=0.05, **base_params)
-        result_narrow = bw_narrow()
+        result_narrow = bw_narrow(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Wide resonance
         bw_wide = RelativisticBreitWigner(s=sample_s_values, width=0.3, **base_params)
-        result_wide = bw_wide()
+        result_wide = bw_wide(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Peak of narrow resonance should be higher
         assert np.max(np.abs(result_narrow)) > np.max(np.abs(result_wide))
@@ -95,13 +101,13 @@ class TestRelativisticBreitWigner:
         """Test effect of angular momentum."""
         base_params = {"pole_mass": 0.775, "width": 0.15, "r": 1.0}
 
-        # S-wave (L=0)
-        bw_s = RelativisticBreitWigner(s=sample_s_values, L=0, **base_params)
-        result_s = bw_s()
+        # S-wave (angular_momentum=0)
+        bw_s = RelativisticBreitWigner(s=sample_s_values, **base_params)
+        result_s = bw_s(0, 1)  # angular_momentum=0 (L=0), spin=1 (1/2)
 
-        # P-wave (L=1)
-        bw_p = RelativisticBreitWigner(s=sample_s_values, L=1, **base_params)
-        result_p = bw_p()
+        # P-wave (angular_momentum=2)
+        bw_p = RelativisticBreitWigner(s=sample_s_values, **base_params)
+        result_p = bw_p(2, 1)  # angular_momentum=2 (L=1), spin=1 (1/2)
 
         # Results should be different due to different form factors
         assert not np.allclose(result_s, result_p)
@@ -117,7 +123,9 @@ class TestRelativisticBreitWigner:
 
     def test_breit_wigner_serialization(self, sample_s_values, rho_parameters):
         """Test Breit-Wigner serialization."""
-        bw = RelativisticBreitWigner(s=sample_s_values, **rho_parameters)
+        # Remove L from rho_parameters since it's no longer a field
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        bw = RelativisticBreitWigner(s=sample_s_values, **params)
 
         # Test model dump
         data = bw.model_dump()
@@ -146,8 +154,6 @@ class TestFlatte:
             width2=f0_980_parameters["g_kk"],
             r1=1.0,
             r2=1.0,
-            L1=0,
-            L2=0,
         )
 
         assert isinstance(flatte.s, FixedParam)
@@ -168,11 +174,9 @@ class TestFlatte:
             width2=f0_980_parameters["g_kk"],
             r1=1.0,
             r2=1.0,
-            L1=0,
-            L2=0,
         )
 
-        result = flatte()
+        result = flatte(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         assert isinstance(result, np.ndarray)
         assert result.shape == sample_s_values.shape
@@ -194,11 +198,9 @@ class TestFlatte:
             width2=0.8,
             r1=1.0,
             r2=1.0,
-            L1=0,
-            L2=0,
         )
 
-        result = flatte()
+        result = flatte(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Should show threshold effects
         assert np.all(np.isfinite(result))
@@ -225,13 +227,15 @@ class TestLineshapeBase:
 
     def test_optimization_parameters(self, sample_s_values, rho_parameters):
         """Test optimization parameter extraction."""
-        bw = RelativisticBreitWigner(s=sample_s_values, **rho_parameters)
+        # Remove L from rho_parameters since it's no longer a field
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        bw = RelativisticBreitWigner(s=sample_s_values, **params)
 
         opt_params = bw.get_optimization_parameters()
         assert "pole_mass" in opt_params
         assert "width" in opt_params
         assert "r" in opt_params
-        assert "L" in opt_params
+        assert "q0" in opt_params
         assert "s" not in opt_params  # s is fixed
 
     def test_parameter_override_validation(self, sample_s_values):
@@ -239,12 +243,12 @@ class TestLineshapeBase:
         bw = RelativisticBreitWigner(s=sample_s_values, pole_mass=0.775, width=0.15)
 
         # Valid override
-        result = bw(width=0.2)
+        result = bw(1, 2, width=0.2)  # spin=1 (1/2), angular_momentum=2 (L=1), width=0.2
         assert isinstance(result, np.ndarray)
 
         # Test positional and keyword conflict
         with pytest.raises(ValueError, match="provided both positionally and as keyword"):
-            bw(0.775, pole_mass=0.8)  # pole_mass both positional and keyword
+            bw(1, 2, 0.775, pole_mass=0.8)  # pole_mass both positional and keyword
 
     def test_too_many_positional_args(self, sample_s_values):
         """Test error with too many positional arguments."""
@@ -252,4 +256,4 @@ class TestLineshapeBase:
 
         # Too many positional arguments
         with pytest.raises(ValueError, match="Too many positional arguments"):
-            bw(0.775, 0.15, 1.0, 1, 0.4, 999)  # 6 args, but only 5 expected
+            bw(1, 2, 0.775, 0.15, 1.0, 0.4, 999)  # 7 args, but only 4 expected (after spin, angular_momentum)
