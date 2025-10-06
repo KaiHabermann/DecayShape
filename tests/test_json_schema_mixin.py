@@ -4,18 +4,15 @@ Tests for JsonSchemaMixin functionality across different models.
 
 import json
 
-import numpy as np
-
-from decayshape import Channel, CommonParticles, RelativisticBreitWigner
-
 
 class TestJsonSchemaMixinParticle:
     """Test JsonSchemaMixin for Particle class."""
 
     def test_particle_to_json_schema(self):
         """Test that Particle can generate JSON schema."""
-        pion = CommonParticles.PI_PLUS
-        schema = pion.to_json_schema()
+        from decayshape.particles import Particle
+
+        schema = Particle.to_json_schema()
 
         # Check basic structure
         assert "model_type" in schema
@@ -39,8 +36,9 @@ class TestJsonSchemaMixinParticle:
 
     def test_particle_to_json_string(self):
         """Test that Particle can generate JSON string."""
-        kaon = CommonParticles.K_PLUS
-        json_str = kaon.to_json_string()
+        from decayshape.particles import Particle
+
+        json_str = Particle.to_json_string()
 
         # Should be valid JSON
         parsed = json.loads(json_str)
@@ -54,11 +52,9 @@ class TestJsonSchemaMixinChannel:
 
     def test_channel_to_json_schema(self):
         """Test that Channel can generate JSON schema."""
-        channel = Channel(
-            particle1=CommonParticles.PI_PLUS,
-            particle2=CommonParticles.PI_MINUS,
-        )
-        schema = channel.to_json_schema()
+        from decayshape.particles import Channel
+
+        schema = Channel.to_json_schema()
 
         # Check basic structure
         assert "model_type" in schema
@@ -86,11 +82,9 @@ class TestJsonSchemaMixinChannel:
 
     def test_channel_to_json_string(self):
         """Test that Channel can generate JSON string."""
-        channel = Channel(
-            particle1=CommonParticles.K_PLUS,
-            particle2=CommonParticles.K_MINUS,
-        )
-        json_str = channel.to_json_string()
+        from decayshape.particles import Channel
+
+        json_str = Channel.to_json_string()
 
         # Should be valid JSON
         parsed = json.loads(json_str)
@@ -102,20 +96,9 @@ class TestJsonSchemaMixinLineshape:
 
     def test_lineshape_to_json_schema(self):
         """Test that Lineshape can generate JSON schema."""
-        s = np.linspace(0.5, 2.0, 100) ** 2
-        channel = Channel(
-            particle1=CommonParticles.PI_PLUS,
-            particle2=CommonParticles.PI_MINUS,
-        )
-        bw = RelativisticBreitWigner(
-            s=s,
-            channel=channel,
-            mass=0.770,
-            width=0.150,
-            angular_momentum=1,
-            meson_radius=5.0,
-        )
-        schema = bw.to_json_schema()
+        from decayshape.lineshapes import RelativisticBreitWigner
+
+        schema = RelativisticBreitWigner.to_json_schema()
 
         # Check lineshape-specific structure
         assert "lineshape_type" in schema
@@ -141,20 +124,9 @@ class TestJsonSchemaMixinLineshape:
 
     def test_lineshape_to_json_string(self):
         """Test that Lineshape can generate JSON string."""
-        s = np.array([1.0, 2.0, 3.0])
-        channel = Channel(
-            particle1=CommonParticles.PI_PLUS,
-            particle2=CommonParticles.PI_MINUS,
-        )
-        bw = RelativisticBreitWigner(
-            s=s,
-            channel=channel,
-            mass=0.770,
-            width=0.150,
-            angular_momentum=1,
-            meson_radius=5.0,
-        )
-        json_str = bw.to_json_string()
+        from decayshape.lineshapes import RelativisticBreitWigner
+
+        json_str = RelativisticBreitWigner.to_json_string()
 
         # Should be valid JSON
         parsed = json.loads(json_str)
@@ -165,20 +137,9 @@ class TestJsonSchemaMixinLineshape:
 
     def test_lineshape_exclude_additional_fields(self):
         """Test excluding additional fields from schema."""
-        s = np.array([1.0])
-        channel = Channel(
-            particle1=CommonParticles.PI_PLUS,
-            particle2=CommonParticles.PI_MINUS,
-        )
-        bw = RelativisticBreitWigner(
-            s=s,
-            channel=channel,
-            mass=0.770,
-            width=0.150,
-            angular_momentum=1,
-            meson_radius=5.0,
-        )
-        schema = bw.to_json_schema(exclude_fields=["angular_momentum"])
+        from decayshape.lineshapes import RelativisticBreitWigner
+
+        schema = RelativisticBreitWigner.to_json_schema(exclude_fields=["angular_momentum"])
 
         # Check that additional excluded field is not present
         assert "angular_momentum" not in schema["optimization_parameters"]
@@ -190,27 +151,18 @@ class TestJsonSchemaMixinInheritance:
 
     def test_mixin_is_inherited(self):
         """Test that all models have the mixin methods."""
-        pion = CommonParticles.PI_PLUS
-        channel = Channel(particle1=pion, particle2=pion)
-        s = np.array([1.0])
-        bw = RelativisticBreitWigner(
-            s=s,
-            channel=channel,
-            mass=0.770,
-            width=0.150,
-            angular_momentum=1,
-            meson_radius=5.0,
-        )
+        from decayshape.lineshapes import RelativisticBreitWigner
+        from decayshape.particles import Channel, Particle
 
         # All should have the mixin methods
-        assert hasattr(pion, "to_json_schema")
-        assert hasattr(pion, "to_json_string")
-        assert hasattr(channel, "to_json_schema")
-        assert hasattr(channel, "to_json_string")
-        assert hasattr(bw, "to_json_schema")
-        assert hasattr(bw, "to_json_string")
+        assert hasattr(Particle, "to_json_schema")
+        assert hasattr(Particle, "to_json_string")
+        assert hasattr(Channel, "to_json_schema")
+        assert hasattr(Channel, "to_json_string")
+        assert hasattr(RelativisticBreitWigner, "to_json_schema")
+        assert hasattr(RelativisticBreitWigner, "to_json_string")
 
         # All should be callable
-        assert callable(pion.to_json_schema)
-        assert callable(channel.to_json_schema)
-        assert callable(bw.to_json_schema)
+        assert callable(Particle.to_json_schema)
+        assert callable(Channel.to_json_schema)
+        assert callable(RelativisticBreitWigner.to_json_schema)

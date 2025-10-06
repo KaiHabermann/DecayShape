@@ -7,10 +7,6 @@ of Particle, Channel, and Lineshape objects for frontend consumption.
 
 import json
 
-import numpy as np
-
-from decayshape import Channel, CommonParticles, Flatte, KMatrixAdvanced, RelativisticBreitWigner
-
 
 def main():
     """Demonstrate JSON schema generation for different model types."""
@@ -22,33 +18,25 @@ def main():
     # 1. Particle JSON Schema
     print("\n1. Particle JSON Schema")
     print("-" * 80)
-    pion = CommonParticles.PI_PLUS
-    particle_schema = pion.to_json_schema()
+    from decayshape.particles import Particle
+
+    particle_schema = Particle.to_json_schema()
     print(json.dumps(particle_schema, indent=2))
 
     # 2. Channel JSON Schema
     print("\n2. Channel JSON Schema")
     print("-" * 80)
-    channel = Channel(
-        particle1=CommonParticles.PI_PLUS,
-        particle2=CommonParticles.PI_MINUS,
-    )
-    channel_schema = channel.to_json_schema()
+    from decayshape.particles import Channel
+
+    channel_schema = Channel.to_json_schema()
     print(json.dumps(channel_schema, indent=2))
 
     # 3. Lineshape JSON Schema
     print("\n3. Lineshape JSON Schema (Relativistic Breit-Wigner)")
     print("-" * 80)
-    s = np.linspace(0.5, 2.0, 100) ** 2
-    bw = RelativisticBreitWigner(
-        s=s,
-        channel=channel,
-        mass=0.770,
-        width=0.150,
-        angular_momentum=1,
-        meson_radius=5.0,
-    )
-    lineshape_schema = bw.to_json_schema()
+    from decayshape.lineshapes import RelativisticBreitWigner
+
+    lineshape_schema = RelativisticBreitWigner.to_json_schema()
 
     # Note: The 's' parameter is automatically excluded from the schema
     # as it's not relevant for frontend configuration
@@ -58,43 +46,21 @@ def main():
     print("\n4. Lineshape JSON Schema with Additional Exclusions")
     print("-" * 80)
     # You can exclude additional fields if needed
-    minimal_schema = bw.to_json_schema(exclude_fields=["q0"])
+    minimal_schema = RelativisticBreitWigner.to_json_schema(exclude_fields=["q0"])
     print(json.dumps(minimal_schema, indent=2))
 
     # 5. K-Matrix JSON Schema
     print("\n5. K-Matrix JSON Schema (Advanced Multi-Channel)")
     print("-" * 80)
-    # Create a two-channel K-matrix
-    channel1 = Channel(
-        particle1=CommonParticles.PI_PLUS,
-        particle2=CommonParticles.PI_MINUS,
-    )
-    channel2 = Channel(
-        particle1=CommonParticles.K_PLUS,
-        particle2=CommonParticles.K_MINUS,
-    )
+    from decayshape.kmatrix_advanced import KMatrixAdvanced
 
-    kmatrix = KMatrixAdvanced(
-        s=s,
-        channels=[channel1, channel2],
-        pole_masses=[0.65, 1.2],
-        couplings=[
-            [0.5, 0.3],  # Couplings for pole 1
-            [0.4, 0.6],  # Couplings for pole 2
-        ],
-        scattering_length=[0.1, 0.2],
-        effective_range=[0.05, 0.08],
-        production_couplings=[1.0, 0.5],
-        output_channel=0,
-    )
-
-    kmatrix_schema = kmatrix.to_json_schema()
+    kmatrix_schema = KMatrixAdvanced.to_json_schema()
     print(json.dumps(kmatrix_schema, indent=2))
 
     # 6. Direct JSON String Generation
     print("\n6. Direct JSON String Generation")
     print("-" * 80)
-    json_string = pion.to_json_string(indent=2)
+    json_string = Particle.to_json_string(indent=2)
     print(json_string)
 
     print("\n" + "=" * 80)
@@ -122,31 +88,14 @@ def generate_all_lineshape_schemas(output_file: str = "lineshape_schemas_complet
     print("Generating Schemas for All Available Lineshapes")
     print("=" * 80)
 
-    # Prepare common components
-    s = np.linspace(0.5, 2.0, 100) ** 2
-    channel_pipi = Channel(
-        particle1=CommonParticles.PI_PLUS,
-        particle2=CommonParticles.PI_MINUS,
-    )
-    channel_kk = Channel(
-        particle1=CommonParticles.K_PLUS,
-        particle2=CommonParticles.K_MINUS,
-    )
-
     # Dictionary to hold all schemas
     all_schemas = {}
 
     # 1. Relativistic Breit-Wigner
     print("\n1. Generating RelativisticBreitWigner schema...")
-    bw = RelativisticBreitWigner(
-        s=s,
-        channel=channel_pipi,
-        mass=0.770,
-        width=0.150,
-        angular_momentum=1,
-        meson_radius=5.0,
-    )
-    bw_schema = bw.to_json_schema()
+    from decayshape.lineshapes import RelativisticBreitWigner
+
+    bw_schema = RelativisticBreitWigner.to_json_schema()
     # Remove current_values
     bw_schema.pop("current_values", None)
     all_schemas["RelativisticBreitWigner"] = bw_schema
@@ -154,21 +103,9 @@ def generate_all_lineshape_schemas(output_file: str = "lineshape_schemas_complet
 
     # 2. Flatté
     print("\n2. Generating Flatte schema...")
-    flatte = Flatte(
-        s=s,
-        channel1_mass1=CommonParticles.PI_PLUS.mass,
-        channel1_mass2=CommonParticles.PI_MINUS.mass,
-        channel2_mass1=CommonParticles.K_PLUS.mass,
-        channel2_mass2=CommonParticles.K_MINUS.mass,
-        pole_mass=0.980,
-        width1=0.167,
-        width2=0.0,
-        r1=1.0,
-        r2=1.0,
-        L1=0,
-        L2=0,
-    )
-    flatte_schema = flatte.to_json_schema()
+    from decayshape.lineshapes import Flatte
+
+    flatte_schema = Flatte.to_json_schema()
     # Remove current_values
     flatte_schema.pop("current_values", None)
     all_schemas["Flatte"] = flatte_schema
@@ -176,20 +113,9 @@ def generate_all_lineshape_schemas(output_file: str = "lineshape_schemas_complet
 
     # 3. K-Matrix Advanced
     print("\n3. Generating KMatrixAdvanced schema...")
-    kmatrix = KMatrixAdvanced(
-        s=s,
-        channels=[channel_pipi, channel_kk],
-        pole_masses=[0.65, 1.2],
-        couplings=[
-            [0.5, 0.3],
-            [0.4, 0.6],
-        ],
-        scattering_length=[0.1, 0.2],
-        effective_range=[0.05, 0.08],
-        production_couplings=[1.0, 0.5],
-        output_channel=0,
-    )
-    kmatrix_schema = kmatrix.to_json_schema()
+    from decayshape.kmatrix_advanced import KMatrixAdvanced
+
+    kmatrix_schema = KMatrixAdvanced.to_json_schema()
     # Remove current_values
     kmatrix_schema.pop("current_values", None)
     all_schemas["KMatrixAdvanced"] = kmatrix_schema

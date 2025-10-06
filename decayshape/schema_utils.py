@@ -25,50 +25,23 @@ def get_all_lineshape_schemas() -> dict[str, dict[str, Any]]:
     schemas = {}
 
     # Dummy s values (will be ignored in schemas)
-    s_vals = np.array([0.5, 0.6, 0.7])
+    np.array([0.5, 0.6, 0.7])
 
     # RelativisticBreitWigner
     try:
-        bw = RelativisticBreitWigner(s=s_vals, pole_mass=0.775, width=0.15)
-        schemas["RelativisticBreitWigner"] = bw.to_json_schema()
+        schemas["RelativisticBreitWigner"] = RelativisticBreitWigner.to_json_schema()
     except Exception as e:
         schemas["RelativisticBreitWigner"] = {"error": str(e)}
 
     # Flatte
     try:
-        flatte = Flatte(
-            s=s_vals,
-            pole_mass=0.98,
-            channel1_mass1=0.139,
-            channel1_mass2=0.139,
-            channel2_mass1=0.494,
-            channel2_mass2=0.494,
-            width1=1.0,
-            width2=0.5,
-            r1=1.0,
-            r2=1.0,
-            L1=0,
-            L2=0,
-        )
-        schemas["Flatte"] = flatte.to_json_schema()
+        schemas["Flatte"] = Flatte.to_json_schema()
     except Exception as e:
         schemas["Flatte"] = {"error": str(e)}
 
     # KMatrixAdvanced
     try:
-        # Create sample channels
-        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
-
-        kmat = KMatrixAdvanced(
-            s=s_vals,
-            channels=[pipi_channel, kk_channel],
-            pole_masses=[0.775, 0.98],
-            production_couplings=[1.0, 0.8],
-            decay_couplings=[1.0, 0.5, 0.3, 0.7],
-            output_channel=0,
-        )
-        schemas["KMatrixAdvanced"] = kmat.to_json_schema()
+        schemas["KMatrixAdvanced"] = KMatrixAdvanced.to_json_schema()
     except Exception as e:
         schemas["KMatrixAdvanced"] = {"error": str(e)}
 

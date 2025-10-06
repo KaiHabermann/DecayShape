@@ -365,33 +365,13 @@ class KMatrixAdvanced(Lineshape):
             denominator_matrices = unity[:, :, None] - 1j * T_rho_product
 
             # Vectorized matrix solve for all s values
-            try:
-                # Solve: denominator_matrices @ F = P for F
-                # Transpose to (s_len, n_channels, n_channels) for batch solve
-                F_matrix = np.linalg.solve(
-                    np.transpose(denominator_matrices, (2, 0, 1)),  # (s_len, n_channels, n_channels)
-                    np.transpose(P_vector, (1, 0))[:, :, None],  # (s_len, n_channels, 1)
-                )
-                F_vector = np.transpose(F_matrix[:, :, 0], (1, 0))  # Back to (n_channels, s_len)
-            except np.linalg.LinAlgError:
-                # Fallback to element-wise inversion if vectorized approach fails
-                F_vector = np.zeros((n_channels, s_len), dtype=complex)
-                for s_idx in range(s_len):
-                    T_s = T_matrix[:, :, s_idx]
-                    P_s = P_vector[:, s_idx]
-                    rho_s = rho[:, s_idx]
-
-                    unity = np.eye(n_channels)
-                    rho_diag_s = np.diag(rho_s)
-                    denominator_matrix = unity - 1j * T_s @ rho_diag_s
-
-                    # Check if the matrix is invertible
-                    det = np.linalg.det(denominator_matrix)
-                    if np.abs(det) < 1e-12:
-                        # If determinant is too small, use pseudo-inverse
-                        F_vector[:, s_idx] = np.linalg.pinv(denominator_matrix) @ P_s
-                    else:
-                        F_vector[:, s_idx] = np.linalg.inv(denominator_matrix) @ P_s
+            # Solve: denominator_matrices @ F = P for F
+            # Transpose to (s_len, n_channels, n_channels) for batch solve
+            F_matrix = np.linalg.solve(
+                np.transpose(denominator_matrices, (2, 0, 1)),  # (s_len, n_channels, n_channels)
+                np.transpose(P_vector, (1, 0))[:, :, None],  # (s_len, n_channels, 1)
+            )
+            F_vector = np.transpose(F_matrix[:, :, 0], (1, 0))  # Back to (n_channels, s_len)
 
         return F_vector
 
