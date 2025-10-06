@@ -14,6 +14,7 @@ from decayshape import config
 
 from .base import FixedParam, Lineshape
 from .particles import Channel
+from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 
 class KMatrixAdvanced(Lineshape):
@@ -188,12 +189,18 @@ class KMatrixAdvanced(Lineshape):
 
         # Step 4: Return the specified channel of the F-vector
         output_idx = self.output_channel.value
+
+        # Compute angular momentum barrier factor
+        q = config.backend.sqrt(s) / 2.0
+        L = angular_momentum // 2
+        B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["q0"], params["r"], L)
+
         if n_channels == 1:
             # Single channel: F_vector is already 1D
-            return F_vector
+            return F_vector * B
         else:
             # Multi-channel: F_vector is 2D, return specified channel
-            return F_vector[output_idx, :]
+            return F_vector[output_idx, :] * B
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
