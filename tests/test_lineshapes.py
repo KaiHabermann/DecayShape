@@ -7,7 +7,7 @@ import pytest
 
 from decayshape import FixedParam, RelativisticBreitWigner
 from decayshape.lineshapes import Flatte
-from decayshape.particles import CommonParticles
+from decayshape.particles import Channel, CommonParticles
 
 
 class TestRelativisticBreitWigner:
@@ -15,9 +15,12 @@ class TestRelativisticBreitWigner:
 
     def test_create_breit_wigner(self, sample_s_values, rho_parameters):
         """Test creating a Breit-Wigner lineshape."""
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        
         # Remove L from rho_parameters since it's no longer a field
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
-        bw = RelativisticBreitWigner(s=sample_s_values, **params)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
 
         assert isinstance(bw.s, FixedParam)
         assert bw.pole_mass == rho_parameters["pole_mass"]
@@ -26,9 +29,12 @@ class TestRelativisticBreitWigner:
 
     def test_breit_wigner_evaluation(self, sample_s_values, rho_parameters):
         """Test evaluating Breit-Wigner lineshape."""
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        
         # Remove L from rho_parameters since it's no longer a field
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
-        bw = RelativisticBreitWigner(s=sample_s_values, **params)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
 
         # Now need to provide spin and angular_momentum as positional arguments
         result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
@@ -41,7 +47,9 @@ class TestRelativisticBreitWigner:
         """Test parameter override in Breit-Wigner."""
         # Remove L from rho_parameters since it's no longer a field
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
-        bw = RelativisticBreitWigner(s=sample_s_values, **params)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
 
         # Evaluate with default parameters
         result_default = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
@@ -59,7 +67,9 @@ class TestRelativisticBreitWigner:
 
     def test_breit_wigner_parameter_order(self, sample_s_values):
         """Test parameter order property."""
-        bw = RelativisticBreitWigner(s=sample_s_values, pole_mass=0.775, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, pole_mass=0.775, width=0.15)
 
         expected_order = ["pole_mass", "width", "r", "q0"]
         assert bw.parameter_order == expected_order
@@ -70,7 +80,9 @@ class TestRelativisticBreitWigner:
         pole_mass = 0.775
         s_values = np.linspace(0.4, 1.2, 100)
 
-        bw = RelativisticBreitWigner(s=s_values, pole_mass=pole_mass, width=0.15, r=1.0)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=s_values, channel=pipi_channel, pole_mass=pole_mass, width=0.15, r=1.0)
 
         result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         magnitude = np.abs(result)
@@ -87,11 +99,15 @@ class TestRelativisticBreitWigner:
         base_params = {"pole_mass": 0.775, "r": 1.0}
 
         # Narrow resonance
-        bw_narrow = RelativisticBreitWigner(s=sample_s_values, width=0.05, **base_params)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw_narrow = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, width=0.05, **base_params)
         result_narrow = bw_narrow(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Wide resonance
-        bw_wide = RelativisticBreitWigner(s=sample_s_values, width=0.3, **base_params)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw_wide = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, width=0.3, **base_params)
         result_wide = bw_wide(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Peak of narrow resonance should be higher
@@ -102,11 +118,15 @@ class TestRelativisticBreitWigner:
         base_params = {"pole_mass": 0.775, "width": 0.15, "r": 1.0}
 
         # S-wave (angular_momentum=0)
-        bw_s = RelativisticBreitWigner(s=sample_s_values, **base_params)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw_s = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **base_params)
         result_s = bw_s(0, 1)  # angular_momentum=0 (L=0), spin=1 (1/2)
 
         # P-wave (angular_momentum=2)
-        bw_p = RelativisticBreitWigner(s=sample_s_values, **base_params)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw_p = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **base_params)
         result_p = bw_p(2, 1)  # angular_momentum=2 (L=1), spin=1 (1/2)
 
         # Results should be different due to different form factors
@@ -115,17 +135,25 @@ class TestRelativisticBreitWigner:
     def test_breit_wigner_q0_calculation(self, sample_s_values):
         """Test automatic q0 calculation."""
         pole_mass = 0.775
-        bw = RelativisticBreitWigner(s=sample_s_values, pole_mass=pole_mass, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, pole_mass=pole_mass, width=0.15)
 
-        # q0 should be set to pole_mass / 2
-        expected_q0 = pole_mass / 2.0
+        # q0 should be calculated using the two-body breakup momentum
+        # Manual calculation for verification
+        m1 = CommonParticles.PI_PLUS.mass
+        m2 = CommonParticles.PI_MINUS.mass
+        s_pole = pole_mass ** 2
+        expected_q0 = np.sqrt((s_pole - (m1 + m2) ** 2) * (s_pole - (m1 - m2) ** 2)) / (2 * np.sqrt(s_pole))
         assert bw.q0 == pytest.approx(expected_q0, rel=1e-10)
 
     def test_breit_wigner_serialization(self, sample_s_values, rho_parameters):
         """Test Breit-Wigner serialization."""
         # Remove L from rho_parameters since it's no longer a field
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
-        bw = RelativisticBreitWigner(s=sample_s_values, **params)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
 
         # Test model dump
         data = bw.model_dump()
@@ -143,12 +171,14 @@ class TestFlatte:
 
     def test_create_flatte(self, sample_s_values, f0_980_parameters):
         """Test creating a Flatte lineshape."""
+        # Create channels
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+        
         flatte = Flatte(
             s=sample_s_values,
-            channel1_mass1=CommonParticles.PI_PLUS.mass,
-            channel1_mass2=CommonParticles.PI_MINUS.mass,
-            channel2_mass1=CommonParticles.K_PLUS.mass,
-            channel2_mass2=CommonParticles.K_MINUS.mass,
+            channel1=pipi_channel,
+            channel2=kk_channel,
             pole_mass=f0_980_parameters["mass"],
             width1=f0_980_parameters["g_pipi"],
             width2=f0_980_parameters["g_kk"],
@@ -163,12 +193,14 @@ class TestFlatte:
 
     def test_flatte_evaluation(self, sample_s_values, f0_980_parameters):
         """Test evaluating Flatte lineshape."""
+        # Create channels
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+        
         flatte = Flatte(
             s=sample_s_values,
-            channel1_mass1=CommonParticles.PI_PLUS.mass,
-            channel1_mass2=CommonParticles.PI_MINUS.mass,
-            channel2_mass1=CommonParticles.K_PLUS.mass,
-            channel2_mass2=CommonParticles.K_MINUS.mass,
+            channel1=pipi_channel,
+            channel2=kk_channel,
             pole_mass=f0_980_parameters["mass"],
             width1=f0_980_parameters["g_pipi"],
             width2=f0_980_parameters["g_kk"],
@@ -187,12 +219,14 @@ class TestFlatte:
         # Create s values spanning both thresholds
         s_values = np.linspace(0.1, 1.5, 200)
 
+        # Create channels
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+
         flatte = Flatte(
             s=s_values,
-            channel1_mass1=CommonParticles.PI_PLUS.mass,
-            channel1_mass2=CommonParticles.PI_MINUS.mass,
-            channel2_mass1=CommonParticles.K_PLUS.mass,
-            channel2_mass2=CommonParticles.K_MINUS.mass,
+            channel1=pipi_channel,
+            channel2=kk_channel,
             pole_mass=0.98,  # Near KK threshold
             width1=0.2,
             width2=0.8,
@@ -219,7 +253,11 @@ class TestLineshapeBase:
 
     def test_fixed_parameters(self, sample_s_values, rho_parameters):
         """Test fixed parameter extraction."""
-        bw = RelativisticBreitWigner(s=sample_s_values, **rho_parameters)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        # Remove L from rho_parameters since it's no longer a field
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
 
         fixed_params = bw.get_fixed_parameters()
         assert "s" in fixed_params
@@ -229,7 +267,9 @@ class TestLineshapeBase:
         """Test optimization parameter extraction."""
         # Remove L from rho_parameters since it's no longer a field
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
-        bw = RelativisticBreitWigner(s=sample_s_values, **params)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
 
         opt_params = bw.get_optimization_parameters()
         assert "pole_mass" in opt_params
@@ -240,7 +280,9 @@ class TestLineshapeBase:
 
     def test_parameter_override_validation(self, sample_s_values):
         """Test parameter override validation."""
-        bw = RelativisticBreitWigner(s=sample_s_values, pole_mass=0.775, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, pole_mass=0.775, width=0.15)
 
         # Valid override
         result = bw(1, 2, width=0.2)  # spin=1 (1/2), angular_momentum=2 (L=1), width=0.2
@@ -252,7 +294,9 @@ class TestLineshapeBase:
 
     def test_too_many_positional_args(self, sample_s_values):
         """Test error with too many positional arguments."""
-        bw = RelativisticBreitWigner(s=sample_s_values, pole_mass=0.775, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, pole_mass=0.775, width=0.15)
 
         # Too many positional arguments
         with pytest.raises(ValueError, match="Too many positional arguments"):

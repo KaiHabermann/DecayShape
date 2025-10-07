@@ -37,9 +37,9 @@ def create_threshold_kmatrix():
     kmat = ds.KMatrixAdvanced(
         s=s_values,
         channels=[pipi_channel, kk_channel],
-        pole_masses=[0.6, 1.0],  # First pole below ππ threshold, second above KK threshold
+        pole_masses=[0.6, 0.97],  # First pole below ππ threshold, second above KK threshold
         production_couplings=[1.0, 0.8],  # Different production strengths
-        decay_couplings=[1.0, 0.5, 0.3, 0.7],  # 2 poles × 2 channels = 4 couplings
+        decay_couplings=[1.0, 900.5, 9.3, 9.7],  # 2 poles × 2 channels = 4 couplings
         output_channel=0,  # Will be overridden for different channels
     )
 
@@ -64,7 +64,7 @@ def plot_kmatrix_channels():
         decay_couplings=kmat.decay_couplings,
         output_channel=0,
     )
-    result_0 = kmat_0()
+    result_0 = kmat_0(0,0)
 
     # Channel 1 (KK)
     kmat_1 = ds.KMatrixAdvanced(
@@ -75,7 +75,7 @@ def plot_kmatrix_channels():
         decay_couplings=kmat.decay_couplings,
         output_channel=1,
     )
-    result_1 = kmat_1()
+    result_1 = kmat_1(0,0)
 
     # Create the plot
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
@@ -98,7 +98,7 @@ def plot_kmatrix_channels():
     ax1.axvline(0.28, color="b", linestyle="--", alpha=0.7, label="ππ threshold")
     ax1.axvline(0.98, color="r", linestyle="--", alpha=0.7, label="KK threshold")
     ax1.axvline(0.6, color="g", linestyle=":", alpha=0.7, label="Pole 1 (0.6 GeV)")
-    ax1.axvline(1.0, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (1.0 GeV)")
+    ax1.axvline(0.95, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (0.95 GeV)")
     ax1.set_xlabel("s (GeV²)")
     ax1.set_ylabel("|F|")
     ax1.set_title("K-matrix Magnitude - Both Channels")
@@ -112,7 +112,7 @@ def plot_kmatrix_channels():
     ax2.axvline(0.28, color="b", linestyle="--", alpha=0.7, label="ππ threshold")
     ax2.axvline(0.98, color="r", linestyle="--", alpha=0.7, label="KK threshold")
     ax2.axvline(0.6, color="g", linestyle=":", alpha=0.7, label="Pole 1 (0.6 GeV)")
-    ax2.axvline(1.0, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (1.0 GeV)")
+    ax2.axvline(0.95, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (0.95 GeV)")
     ax2.set_xlabel("s (GeV²)")
     ax2.set_ylabel("Re(F)")
     ax2.set_title("K-matrix Real Part - Both Channels")
@@ -126,7 +126,7 @@ def plot_kmatrix_channels():
     ax3.axvline(0.28, color="b", linestyle="--", alpha=0.7, label="ππ threshold")
     ax3.axvline(0.98, color="r", linestyle="--", alpha=0.7, label="KK threshold")
     ax3.axvline(0.6, color="g", linestyle=":", alpha=0.7, label="Pole 1 (0.6 GeV)")
-    ax3.axvline(1.0, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (1.0 GeV)")
+    ax3.axvline(0.95, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (0.95 GeV)")
     ax3.set_xlabel("s (GeV²)")
     ax3.set_ylabel("Im(F)")
     ax3.set_title("K-matrix Imaginary Part - Both Channels")
@@ -142,7 +142,7 @@ def plot_kmatrix_channels():
     ax4.axvline(0.28, color="b", linestyle="--", alpha=0.7, label="ππ threshold")
     ax4.axvline(0.98, color="r", linestyle="--", alpha=0.7, label="KK threshold")
     ax4.axvline(0.6, color="g", linestyle=":", alpha=0.7, label="Pole 1 (0.6 GeV)")
-    ax4.axvline(1.0, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (1.0 GeV)")
+    ax4.axvline(0.95, color="orange", linestyle=":", alpha=0.7, label="Pole 2 (0.95 GeV)")
     ax4.set_xlabel("s (GeV²)")
     ax4.set_ylabel("Phase (rad)")
     ax4.set_title("K-matrix Phase - Both Channels")
@@ -151,7 +151,7 @@ def plot_kmatrix_channels():
     ax4.set_xlim(0.1, 1.5)
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig("two_pole_two_channel_Kmatrix.png")
 
     return result_0, result_1, s_values
 
@@ -165,7 +165,7 @@ def analyze_threshold_effects(result_0, result_1, s_values):
     pipi_threshold = 0.28
     kk_threshold = 0.98
     pole_1 = 0.6
-    pole_2 = 1.0
+    pole_2 = 0.95
 
     # Find closest indices
     idx_pipi = np.argmin(np.abs(s_values - pipi_threshold))

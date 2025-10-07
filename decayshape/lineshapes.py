@@ -14,7 +14,8 @@ from pydantic import Field
 from decayshape import config
 
 from .base import FixedParam, Lineshape
-from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor, relativistic_breit_wigner_denominator
+from .particles import Channel
+from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor, relativistic_breit_wigner_denominator, two_body_breakup_momentum
 
 
 class RelativisticBreitWigner(Lineshape):
@@ -25,11 +26,14 @@ class RelativisticBreitWigner(Lineshape):
     the finite width and relativistic effects.
     """
 
-    # All parameters are optimization parameters (no FixedParam used)
+    # Fixed parameters (don't change during optimization)
+    channel: FixedParam[Channel] = Field(..., description="Decay channel for the resonance")
+    
+    # Optimization parameters
     pole_mass: float = Field(default=0.775, description="Pole mass of the resonance")
     width: float = Field(default=0.15, description="Resonance width")
     r: float = Field(default=1.0, description="Hadron radius parameter for Blatt-Weiskopf form factor")
-    q0: Optional[float] = Field(default=None, description="Reference momentum (calculated from pole_mass if None)")
+    q0: Optional[float] = Field(default=None, description="Reference momentum (calculated from channel if None)")
 
     @property
     def parameter_order(self) -> list[str]:
@@ -39,7 +43,12 @@ class RelativisticBreitWigner(Lineshape):
     def model_post_init(self, __context):
         """Post-initialization to set q0 if not provided."""
         if self.q0 is None:
-            self.q0 = self.pole_mass / 2.0
+            # Calculate q0 using the two-body breakup momentum at the pole mass
+            channel = self.channel.value
+            m1 = channel.particle1.value.mass
+            m2 = channel.particle2.value.mass
+            s_pole = self.pole_mass ** 2
+            self.q0 = two_body_breakup_momentum(s_pole, m1, m2)
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
@@ -60,8 +69,11 @@ class RelativisticBreitWigner(Lineshape):
 
         np = config.backend  # Get backend dynamically
 
-        # Calculate momentum in the decay frame
-        q = np.sqrt(s) / 2.0
+        # Calculate momentum in the decay frame using channel masses
+        channel = self.channel.value
+        m1 = channel.particle1.value.mass
+        m2 = channel.particle2.value.mass
+        q = two_body_breakup_momentum(s, m1, m2)
 
         # Convert doubled angular momentum to actual L value
         L = angular_momentum // 2
@@ -94,10 +106,8 @@ class Flatte(Lineshape):
     """
 
     # Fixed parameters (don't change during optimization)
-    channel1_mass1: FixedParam[float]
-    channel1_mass2: FixedParam[float]
-    channel2_mass1: FixedParam[float]
-    channel2_mass2: FixedParam[float]
+    channel1: FixedParam[Channel] = Field(..., description="First decay channel")
+    channel2: FixedParam[Channel] = Field(..., description="Second decay channel")
 
     # Optimization parameters
     pole_mass: float = Field(description="Pole mass of the resonance")
@@ -139,15 +149,17 @@ class Flatte(Lineshape):
 
         np = config.backend  # Get backend dynamically
 
-        # Calculate momenta in both channels using proper channel masses
+        # Calculate momenta in both channels using Channel objects
         # Channel 1 momentum
-        m1_1 = self.channel1_mass1.value
-        m1_2 = self.channel1_mass2.value
+        channel1 = self.channel1.value
+        m1_1 = channel1.particle1.value.mass
+        m1_2 = channel1.particle2.value.mass
         q1 = np.sqrt((s - (m1_1 + m1_2) ** 2) * (s - (m1_1 - m1_2) ** 2)) / (2 * np.sqrt(s))
 
         # Channel 2 momentum
-        m2_1 = self.channel2_mass1.value
-        m2_2 = self.channel2_mass2.value
+        channel2 = self.channel2.value
+        m2_1 = channel2.particle1.value.mass
+        m2_2 = channel2.particle2.value.mass
         q2 = np.sqrt((s - (m2_1 + m2_2) ** 2) * (s - (m2_1 - m2_2) ** 2)) / (2 * np.sqrt(s))
 
         # Convert doubled angular momentum to actual L value

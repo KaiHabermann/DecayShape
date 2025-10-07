@@ -6,7 +6,7 @@ that uses the particle/pole/channel structure for complex multi-channel
 resonance analysis.
 """
 
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from pydantic import Field, model_validator
 
@@ -40,7 +40,7 @@ class KMatrixAdvanced(Lineshape):
         default_factory=list, description="Decay couplings from each pole to each channel (length = n_poles × n_channels)"
     )
     r: float = Field(default=1.0, description="Hadron radius parameter")
-    q0: float = Field(default=None, description="Reference momentum")
+    q0: Optional[float] = Field(default=None, description="Reference momentum")
 
     class Config:
         arbitrary_types_allowed = True

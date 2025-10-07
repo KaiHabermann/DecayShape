@@ -77,6 +77,7 @@ class JsonSchemaMixin:
                 "schema": type_info.get("schema"),  # For nested models with JsonSchemaMixin
                 "class": type_info.get("class"),  # Class name for object types
                 "item_schema": type_info.get("item_schema"),  # Schema for array items
+                "optional": type_info.get("optional", False),  # Mark if parameter is optional
             }
 
             # Remove None values to keep JSON clean
@@ -142,7 +143,10 @@ class JsonSchemaMixin:
             # Handle Union types (like Optional)
             non_none_types = [arg for arg in args if arg is not type(None)]
             if len(non_none_types) == 1:
-                return cls._type_to_json_info(non_none_types[0])
+                # This is an Optional type (Union[T, None])
+                result = cls._type_to_json_info(non_none_types[0])
+                result["optional"] = True
+                return result
             else:
                 return {"type": "union", "anyOf": [cls._type_to_json_info(arg) for arg in non_none_types]}
 
@@ -533,6 +537,7 @@ class Lineshape(LineshapeBase, JsonSchemaMixin, ABC):
                 "schema": type_info.get("schema"),  # For nested models with JsonSchemaMixin
                 "class": type_info.get("class"),  # Class name for object types
                 "item_schema": type_info.get("item_schema"),  # Schema for array items
+                "optional": type_info.get("optional", False),  # Mark if parameter is optional
             }
 
             # Remove None values to keep JSON clean

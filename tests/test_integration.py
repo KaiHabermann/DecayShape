@@ -18,7 +18,9 @@ class TestBasicWorkflow:
         s_values = np.linspace(0.3, 1.2, 100)
 
         # Create Breit-Wigner
-        rho = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        rho = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
         # Evaluate
         amplitude = rho(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
@@ -41,7 +43,10 @@ class TestBasicWorkflow:
         s_values = np.linspace(0.5, 1.0, 50)
 
         # Create lineshape
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
         # Test different parameter combinations (simulating optimization)
         test_params = [{"width": 0.1, "r": 0.8}, {"width": 0.2, "r": 1.2}, {"pole_mass": 0.8, "width": 0.15}]
@@ -124,7 +129,10 @@ class TestFixedParamIntegration:
         # This will be auto-wrapped when used in a lineshape
 
         # Use in lineshape (s will be auto-wrapped)
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15)
 
         # Should forward array attributes through auto-wrapped FixedParam
         assert bw.s.shape == s_values.shape
@@ -144,7 +152,10 @@ class TestFixedParamIntegration:
         s_values = np.array([0.5, 0.6, 0.7])
 
         # Create complex object with FixedParam
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
         # Serialize
         data = bw.model_dump()
@@ -169,7 +180,10 @@ class TestBackendIntegration:
         s_values = np.array([0.5, 0.6, 0.7])
 
         # Create various components
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15)
 
         channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
 
@@ -186,14 +200,20 @@ class TestBackendIntegration:
 
         # Create with numpy array
         s_numpy = np.array([0.5, 0.6, 0.7])
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_numpy, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_numpy, width=0.15)
 
         result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         assert isinstance(result, np.ndarray)
 
         # Should handle different input types gracefully
         s_list = [0.5, 0.6, 0.7]
-        bw_list = RelativisticBreitWigner(pole_mass=0.775, s=s_list, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw_list = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_list, width=0.15)
 
         result_list = bw_list(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
         assert isinstance(result_list, np.ndarray)
@@ -230,7 +250,10 @@ class TestPerformance:
         s_values = np.linspace(0.1, 2.0, 10000)
 
         # Should handle large arrays efficiently
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15)
 
         result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
@@ -242,7 +265,10 @@ class TestPerformance:
         """Test repeated evaluations for optimization scenarios."""
         s_values = np.linspace(0.5, 1.0, 1000)
 
-        bw = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15)
+        # Create a channel (rho -> pi+ pi-)
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15)
 
         # Multiple evaluations with different parameters
         results = []
@@ -269,9 +295,14 @@ class TestRealWorldScenarios:
         s_values = masses**2
 
         # Create multiple resonances
-        rho_770 = RelativisticBreitWigner(pole_mass=0.775, s=s_values, width=0.15, r=1.0)
+        # Create channels
+        from decayshape.particles import Channel, CommonParticles
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        rho_770 = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_values, width=0.15, r=1.0)
 
-        f0_980 = RelativisticBreitWigner(pole_mass=0.98, s=s_values, width=0.05, r=1.0)
+        # Create a channel for f0(980) -> pi+ pi-
+        f0_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        f0_980 = RelativisticBreitWigner(channel=f0_channel, pole_mass=0.98, s=s_values, width=0.05, r=1.0)
 
         # Evaluate amplitudes
         amp_rho = rho_770(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
