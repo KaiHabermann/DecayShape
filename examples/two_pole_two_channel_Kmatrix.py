@@ -64,7 +64,7 @@ def plot_kmatrix_channels():
         decay_couplings=kmat.decay_couplings,
         output_channel=0,
     )
-    result_0 = kmat_0(0,0)
+    result_0 = kmat_0(0, 0)
 
     # Channel 1 (KK)
     kmat_1 = ds.KMatrixAdvanced(
@@ -75,7 +75,7 @@ def plot_kmatrix_channels():
         decay_couplings=kmat.decay_couplings,
         output_channel=1,
     )
-    result_1 = kmat_1(0,0)
+    result_1 = kmat_1(0, 0)
 
     # Create the plot
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))

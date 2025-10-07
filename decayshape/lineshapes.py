@@ -15,7 +15,12 @@ from decayshape import config
 
 from .base import FixedParam, Lineshape
 from .particles import Channel
-from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor, relativistic_breit_wigner_denominator, two_body_breakup_momentum
+from .utils import (
+    angular_momentum_barrier_factor,
+    blatt_weiskopf_form_factor,
+    relativistic_breit_wigner_denominator,
+    two_body_breakup_momentum,
+)
 
 
 class RelativisticBreitWigner(Lineshape):
@@ -28,7 +33,7 @@ class RelativisticBreitWigner(Lineshape):
 
     # Fixed parameters (don't change during optimization)
     channel: FixedParam[Channel] = Field(..., description="Decay channel for the resonance")
-    
+
     # Optimization parameters
     pole_mass: float = Field(default=0.775, description="Pole mass of the resonance")
     width: float = Field(default=0.15, description="Resonance width")
@@ -47,7 +52,7 @@ class RelativisticBreitWigner(Lineshape):
             channel = self.channel.value
             m1 = channel.particle1.value.mass
             m2 = channel.particle2.value.mass
-            s_pole = self.pole_mass ** 2
+            s_pole = self.pole_mass**2
             self.q0 = two_body_breakup_momentum(s_pole, m1, m2)
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:

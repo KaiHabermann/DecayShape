@@ -17,7 +17,7 @@ class TestRelativisticBreitWigner:
         """Test creating a Breit-Wigner lineshape."""
         # Create a channel (rho -> pi+ pi-)
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        
+
         # Remove L from rho_parameters since it's no longer a field
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
         bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
@@ -31,7 +31,7 @@ class TestRelativisticBreitWigner:
         """Test evaluating Breit-Wigner lineshape."""
         # Create a channel (rho -> pi+ pi-)
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        
+
         # Remove L from rho_parameters since it's no longer a field
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
         bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
@@ -143,7 +143,7 @@ class TestRelativisticBreitWigner:
         # Manual calculation for verification
         m1 = CommonParticles.PI_PLUS.mass
         m2 = CommonParticles.PI_MINUS.mass
-        s_pole = pole_mass ** 2
+        s_pole = pole_mass**2
         expected_q0 = np.sqrt((s_pole - (m1 + m2) ** 2) * (s_pole - (m1 - m2) ** 2)) / (2 * np.sqrt(s_pole))
         assert bw.q0 == pytest.approx(expected_q0, rel=1e-10)
 
@@ -174,7 +174,7 @@ class TestFlatte:
         # Create channels
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
         kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
-        
+
         flatte = Flatte(
             s=sample_s_values,
             channel1=pipi_channel,
@@ -196,7 +196,7 @@ class TestFlatte:
         # Create channels
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
         kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
-        
+
         flatte = Flatte(
             s=sample_s_values,
             channel1=pipi_channel,

@@ -89,20 +89,20 @@ def relativistic_breit_wigner_denominator(s: Union[float, Any], mass: float, wid
 def two_body_breakup_momentum(s: Union[float, Any], m1: float, m2: float) -> Union[float, Any]:
     """
     Calculate the two-body breakup momentum in the center-of-mass frame.
-    
+
     This is the momentum of each daughter particle in the center-of-mass frame
     of the parent particle decay.
-    
+
     Args:
         s: Mandelstam variable s (mass squared of the parent)
         m1: Mass of first daughter particle
         m2: Mass of second daughter particle
-        
+
     Returns:
         Breakup momentum in GeV/c
     """
     np = config.backend  # Get backend dynamically
-    
+
     # Two-body breakup momentum formula
     # q = sqrt((s - (m1 + m2)^2) * (s - (m1 - m2)^2)) / (2 * sqrt(s))
     return np.sqrt((s - (m1 + m2) ** 2) * (s - (m1 - m2) ** 2)) / (2 * np.sqrt(s))

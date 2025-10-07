@@ -76,6 +76,7 @@ class TestBackendSwitching:
         s_vals = np.array([0.5, 0.6, 0.7])
         # Create a channel (rho -> pi+ pi-)
         from decayshape.particles import Channel, CommonParticles
+
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
         bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_vals, width=0.15)
 
@@ -151,6 +152,7 @@ class TestBackendCompatibility:
         s_vals = np.array([0.5, 0.6, 0.7])
         # Create a channel (rho -> pi+ pi-)
         from decayshape.particles import Channel, CommonParticles
+
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
         bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_vals, width=0.15)
 
@@ -190,6 +192,7 @@ class TestBackendCompatibility:
         set_backend("numpy")
         # Create a channel (rho -> pi+ pi-)
         from decayshape.particles import Channel, CommonParticles
+
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
         bw_numpy = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_vals, width=0.15)
         result_numpy = bw_numpy(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)

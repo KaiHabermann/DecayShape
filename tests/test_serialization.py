@@ -39,18 +39,17 @@ class TestRelativisticBreitWignerSerialization:
 class TestFlatteSerialization:
     def test_model_dump_and_validate(self):
         s_vals = np.linspace(0.4, 1.2, 4)
-        
+
         # Create channels
         from decayshape.particles import Channel, Particle
+
         pipi_channel = Channel(
-            particle1=Particle(mass=0.139, spin=0, parity=-1),
-            particle2=Particle(mass=0.139, spin=0, parity=-1)
+            particle1=Particle(mass=0.139, spin=0, parity=-1), particle2=Particle(mass=0.139, spin=0, parity=-1)
         )
         kk_channel = Channel(
-            particle1=Particle(mass=0.494, spin=0, parity=-1),
-            particle2=Particle(mass=0.494, spin=0, parity=-1)
+            particle1=Particle(mass=0.494, spin=0, parity=-1), particle2=Particle(mass=0.494, spin=0, parity=-1)
         )
-        
+
         flatte = Flatte(
             s=s_vals,
             channel1=pipi_channel,
