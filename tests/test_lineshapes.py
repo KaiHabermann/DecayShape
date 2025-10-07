@@ -145,7 +145,7 @@ class TestRelativisticBreitWigner:
         m2 = CommonParticles.PI_MINUS.mass
         s_pole = pole_mass**2
         expected_q0 = np.sqrt((s_pole - (m1 + m2) ** 2) * (s_pole - (m1 - m2) ** 2)) / (2 * np.sqrt(s_pole))
-        assert bw.q0 == pytest.approx(expected_q0, rel=1e-10)
+        assert bw.channel.momentum(s_pole) == pytest.approx(expected_q0, rel=1e-10)
 
     def test_breit_wigner_serialization(self, sample_s_values, rho_parameters):
         """Test Breit-Wigner serialization."""

@@ -427,6 +427,20 @@ class Lineshape(LineshapeBase, JsonSchemaMixin, ABC):
                 opt_params[field_name] = field_value
         return opt_params
 
+    def parameters(self) -> dict[str, Any]:
+        """
+        Get parameters in the order specified by parameter_order with their actual values.
+
+        Returns:
+            Dictionary with parameter names as keys and their actual instance values as values,
+            ordered according to parameter_order
+        """
+        param_dict = {}
+        for param_name in self.parameter_order:
+            if hasattr(self, param_name):
+                param_dict[param_name] = getattr(self, param_name)
+        return param_dict
+
     def _get_parameters(self, *args, **kwargs) -> dict[str, Any]:
         """
         Get parameters with overrides from call arguments.

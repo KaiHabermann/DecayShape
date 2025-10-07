@@ -96,15 +96,6 @@ class KMatrixAdvanced(Lineshape):
 
         return params
 
-    def model_post_init(self, __context):
-        """Post-initialization to set q0 if not provided."""
-        if self.q0 is None:
-            # Use the first pole mass as reference
-            if self.pole_masses:
-                self.q0 = self.pole_masses[0] / 2.0
-            else:
-                self.q0 = 0.5
-
     def _get_parameters(self, *args, **kwargs) -> dict[str, Any]:
         """
         Get parameters with overrides, handling flat parameter structure.
@@ -155,6 +146,42 @@ class KMatrixAdvanced(Lineshape):
 
         return params
 
+    def parameters(self) -> dict[str, Any]:
+        """
+        Get parameters in the order specified by parameter_order with their actual values.
+
+        For KMatrixAdvanced, this converts the internal data structures (pole_masses,
+        production_couplings, decay_couplings) to the flat parameter names used in
+        parameter_order.
+
+        Returns:
+            Dictionary with flat parameter names as keys and their actual values as values,
+            ordered according to parameter_order
+        """
+        param_dict = {}
+        n_poles = len(self.pole_masses)
+        n_channels = len(self.channels.value)
+
+        # Add pole masses
+        for i in range(n_poles):
+            param_dict[f"pole_mass_{i}"] = self.pole_masses[i]
+
+        # Add production couplings
+        for i in range(n_poles):
+            param_dict[f"production_coupling_{i}"] = self.production_couplings[i]
+
+        # Add decay couplings
+        for pole_idx in range(n_poles):
+            for channel_idx in range(n_channels):
+                flat_idx = pole_idx * n_channels + channel_idx
+                param_dict[f"decay_coupling_{pole_idx}_{channel_idx}"] = self.decay_couplings[flat_idx]
+
+        # Add other parameters
+        param_dict["r"] = self.r
+        param_dict["q0"] = self.q0
+
+        return param_dict
+
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
         Evaluate the advanced K-matrix lineshape.
@@ -193,6 +220,12 @@ class KMatrixAdvanced(Lineshape):
         # Compute angular momentum barrier factor
         q = config.backend.sqrt(s) / 2.0
         L = angular_momentum // 2
+
+        if params["q0"] is None:
+            params["q0"] = self.channels.value[self.output_channel.value].momentum(
+                config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
+            )
+
         B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["q0"], params["r"], L)
 
         if n_channels == 1:

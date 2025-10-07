@@ -15,12 +15,7 @@ from decayshape import config
 
 from .base import FixedParam, Lineshape
 from .particles import Channel
-from .utils import (
-    angular_momentum_barrier_factor,
-    blatt_weiskopf_form_factor,
-    relativistic_breit_wigner_denominator,
-    two_body_breakup_momentum,
-)
+from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor, relativistic_breit_wigner_denominator
 
 
 class RelativisticBreitWigner(Lineshape):
@@ -45,16 +40,6 @@ class RelativisticBreitWigner(Lineshape):
         """Return the order of parameters for positional arguments."""
         return ["pole_mass", "width", "r", "q0"]
 
-    def model_post_init(self, __context):
-        """Post-initialization to set q0 if not provided."""
-        if self.q0 is None:
-            # Calculate q0 using the two-body breakup momentum at the pole mass
-            channel = self.channel.value
-            m1 = channel.particle1.value.mass
-            m2 = channel.particle2.value.mass
-            s_pole = self.pole_mass**2
-            self.q0 = two_body_breakup_momentum(s_pole, m1, m2)
-
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
         Evaluate the Relativistic Breit-Wigner at given s values.
@@ -72,11 +57,11 @@ class RelativisticBreitWigner(Lineshape):
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
+        if params["q0"] is None:
+            params["q0"] = self.channel.value.momentum(params["pole_mass"] ** 2)
+
         # Calculate momentum in the decay frame using channel masses
-        channel = self.channel.value
-        m1 = channel.particle1.value.mass
-        m2 = channel.particle2.value.mass
-        q = two_body_breakup_momentum(s, m1, m2)
+        q = self.channel.momentum(s)
 
         # Convert doubled angular momentum to actual L value
         L = angular_momentum // 2
