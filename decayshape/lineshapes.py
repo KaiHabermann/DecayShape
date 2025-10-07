@@ -72,8 +72,6 @@ class RelativisticBreitWigner(Lineshape):
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
-        np = config.backend  # Get backend dynamically
-
         # Calculate momentum in the decay frame using channel masses
         channel = self.channel.value
         m1 = channel.particle1.value.mass
