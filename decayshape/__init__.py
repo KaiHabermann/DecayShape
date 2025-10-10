@@ -29,6 +29,17 @@ from .schema_utils import (
 from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 __version__ = "0.1.6"
+
+# Dictionary of all available lineshapes
+available_lineshapes = {
+    "RelativisticBreitWigner": RelativisticBreitWigner,
+    "Flatte": Flatte,
+    "Gaussian": Gaussian,
+    "LinearInterpolation": LinearInterpolation,
+    "QuadraticInterpolation": QuadraticInterpolation,
+    "CubicInterpolation": CubicInterpolation,
+    "KMatrixAdvanced": KMatrixAdvanced,
+}
 __all__ = [
     "config",
     "set_backend",
@@ -45,6 +56,7 @@ __all__ = [
     "Channel",
     "CommonParticles",
     "KMatrixAdvanced",
+    "available_lineshapes",
     "blatt_weiskopf_form_factor",
     "angular_momentum_barrier_factor",
     "get_all_lineshape_schemas",
