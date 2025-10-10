@@ -28,7 +28,7 @@ from .schema_utils import (
 )
 from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 # Dictionary of all available lineshapes
 available_lineshapes = {

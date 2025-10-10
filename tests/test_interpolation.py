@@ -324,3 +324,97 @@ class TestInterpolationEdgeCases:
         # Should still work (numpy.interp handles unsorted xp)
         result = linear(angular_momentum=0, spin=1, s=1.25)
         assert np.isfinite(result), "Should handle unsorted mass points"
+
+
+class TestComplexInterpolation:
+    """Test complex interpolation behavior for all interpolation classes."""
+
+    def test_complex_interpolation_behavior(self):
+        """Test that all interpolation classes work correctly with complex interpolation."""
+        import numpy as np
+
+        from decayshape.base import FixedParam
+
+        # Test data
+        mass_points = [0.5, 1.0, 1.5, 2.0]
+        # For complex interpolation: [real_0, imag_0, real_1, imag_1, real_2, imag_2, real_3, imag_3]
+        complex_amplitudes = [1.0, 0.5, 2.0, 0.3, 1.5, 0.8, 0.8, 0.2]
+        s_values = np.array([0.75, 1.25, 1.75])
+
+        # Test LinearInterpolation with complex=True
+        linear_complex = LinearInterpolation(
+            mass_points=mass_points, amplitudes=complex_amplitudes, complex=FixedParam(value=True)
+        )
+
+        # Test parameter order for complex interpolation
+        expected_param_order = [
+            "amplitude_0_real",
+            "amplitude_0_imag",
+            "amplitude_1_real",
+            "amplitude_1_imag",
+            "amplitude_2_real",
+            "amplitude_2_imag",
+            "amplitude_3_real",
+            "amplitude_3_imag",
+        ]
+        assert (
+            linear_complex.parameter_order == expected_param_order
+        ), "Complex parameter order should include real and imag parts"
+
+        # Test complex evaluation
+        linear_result = linear_complex(angular_momentum=0, spin=1, s=s_values)
+        assert np.iscomplexobj(linear_result), "Linear complex result should be complex"
+        assert linear_result.shape == s_values.shape, "Result shape should match input shape"
+
+        # Test QuadraticInterpolation with complex=True
+        quadratic_complex = QuadraticInterpolation(
+            mass_points=mass_points, amplitudes=complex_amplitudes, complex=FixedParam(value=True)
+        )
+
+        quadratic_result = quadratic_complex(angular_momentum=0, spin=1, s=s_values)
+        assert np.iscomplexobj(quadratic_result), "Quadratic complex result should be complex"
+        assert quadratic_result.shape == s_values.shape, "Result shape should match input shape"
+
+        # Test CubicInterpolation with complex=True
+        cubic_complex = CubicInterpolation(
+            mass_points=mass_points, amplitudes=complex_amplitudes, complex=FixedParam(value=True)
+        )
+
+        cubic_result = cubic_complex(angular_momentum=0, spin=1, s=s_values)
+        assert np.iscomplexobj(cubic_result), "Cubic complex result should be complex"
+        assert cubic_result.shape == s_values.shape, "Result shape should match input shape"
+
+        # Test that all methods give different results (they should interpolate differently)
+        assert not np.allclose(linear_result, quadratic_result), "Linear and quadratic should give different results"
+        assert not np.allclose(linear_result, cubic_result), "Linear and cubic should give different results"
+        assert not np.allclose(quadratic_result, cubic_result), "Quadratic and cubic should give different results"
+
+        # Test that complex interpolation matches at mass points
+        for i, mass in enumerate(mass_points):
+            expected_complex = complex_amplitudes[2 * i] + 1j * complex_amplitudes[2 * i + 1]
+
+            linear_at_mass = linear_complex(angular_momentum=0, spin=1, s=mass)
+            quadratic_at_mass = quadratic_complex(angular_momentum=0, spin=1, s=mass)
+            cubic_at_mass = cubic_complex(angular_momentum=0, spin=1, s=mass)
+
+            # All should match exactly at the mass points
+            assert np.isclose(linear_at_mass, expected_complex), f"Linear should match at mass {mass}"
+            assert np.isclose(quadratic_at_mass, expected_complex), f"Quadratic should match at mass {mass}"
+            assert np.isclose(cubic_at_mass, expected_complex), f"Cubic should match at mass {mass}"
+
+        # Test real interpolation (complex=False) for comparison
+        real_amplitudes = [1.0, 2.0, 1.5, 0.8]
+        linear_real = LinearInterpolation(mass_points=mass_points, amplitudes=real_amplitudes, complex=FixedParam(value=False))
+
+        # Test parameter order for real interpolation
+        expected_real_param_order = ["amplitude_0", "amplitude_1", "amplitude_2", "amplitude_3"]
+        assert (
+            linear_real.parameter_order == expected_real_param_order
+        ), "Real parameter order should be simple amplitude names"
+
+        # Test real evaluation
+        real_result = linear_real(angular_momentum=0, spin=1, s=s_values)
+        assert not np.iscomplexobj(real_result), "Real result should not be complex"
+        assert real_result.shape == s_values.shape, "Result shape should match input shape"
+
+        print("✓ All complex interpolation tests passed!")
