@@ -9,7 +9,15 @@ JAX backends.
 from .base import FixedParam, JsonSchemaMixin
 from .config import config, set_backend
 from .kmatrix_advanced import KMatrixAdvanced
-from .lineshapes import Flatte, RelativisticBreitWigner
+from .lineshapes import (
+    CubicInterpolation,
+    Flatte,
+    Gaussian,
+    InterpolationBase,
+    LinearInterpolation,
+    QuadraticInterpolation,
+    RelativisticBreitWigner,
+)
 from .particles import Channel, CommonParticles, Particle
 from .schema_utils import (
     export_schemas_to_file,
@@ -20,7 +28,7 @@ from .schema_utils import (
 )
 from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
-__version__ = "0.1.0"
+__version__ = "0.1.6"
 __all__ = [
     "config",
     "set_backend",
@@ -28,6 +36,11 @@ __all__ = [
     "JsonSchemaMixin",
     "RelativisticBreitWigner",
     "Flatte",
+    "Gaussian",
+    "InterpolationBase",
+    "LinearInterpolation",
+    "QuadraticInterpolation",
+    "CubicInterpolation",
     "Particle",
     "Channel",
     "CommonParticles",
