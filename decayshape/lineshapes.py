@@ -244,24 +244,51 @@ class InterpolationBase(Lineshape):
     # Fixed parameters - mass points where interpolation is anchored
     mass_points: FixedParam[list[float]] = Field(description="Fixed mass points for interpolation")
 
+    # Fixed parameter - whether to use complex interpolation
+    complex: FixedParam[bool] = Field(
+        default_factory=lambda: FixedParam(value=False),
+        description="Whether to use complex interpolation (real and imaginary parts)",
+    )
+
     # Optimization parameters - amplitude values at mass points
     amplitudes: list[float] = Field(default_factory=list, description="Amplitude values at the mass points")
 
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
-        return [f"amplitude_{i}" for i in range(len(self.mass_points.value))]
+        if self.complex.value:
+            # For complex interpolation, we have real and imaginary parts
+            param_names = []
+            for i in range(len(self.mass_points.value)):
+                param_names.extend([f"amplitude_{i}_real", f"amplitude_{i}_imag"])
+            return param_names
+        else:
+            # For real interpolation, we have just the amplitude values
+            return [f"amplitude_{i}" for i in range(len(self.mass_points.value))]
 
     @model_validator(mode="after")
     def validate_amplitudes_length(self):
-        """Validate that amplitudes list has the same length as mass_points."""
+        """Validate that amplitudes list has the correct length for mass_points."""
+        expected_length = len(self.mass_points.value)
+
+        if self.complex.value:
+            # For complex interpolation, we need 2 * number of mass points (real + imag)
+            expected_length *= 2
 
         if len(self.amplitudes) == 0:
-            self.amplitudes = [1.0] * len(self.mass_points.value)
-        if len(self.amplitudes) != len(self.mass_points.value):
+            # Initialize with default values
+            if self.complex.value:
+                # Default to 1.0 for real parts, 0.0 for imaginary parts
+                self.amplitudes = []
+                for _ in range(len(self.mass_points.value)):
+                    self.amplitudes.extend([1.0, 0.0])  # real, imag
+            else:
+                self.amplitudes = [1.0] * len(self.mass_points.value)
+
+        if len(self.amplitudes) != expected_length:
             raise ValueError(
                 f"Amplitudes list length ({len(self.amplitudes)}) must match "
-                f"mass_points length ({len(self.mass_points.value)})"
+                f"expected length ({expected_length}) for {'complex' if self.complex.value else 'real'} interpolation"
             )
         return self
 
@@ -277,6 +304,86 @@ class InterpolationBase(Lineshape):
         """
         return {name: amplitude for name, amplitude in zip(self.parameter_order, self.amplitudes)}
 
+    def interpolate(self, s_values, mass_points, amplitudes):
+        """
+        Template interpolation function.
+
+        This is a template function that should be overridden by specific
+        interpolation classes (LinearInterpolation, QuadraticInterpolation, etc.)
+        to implement their specific interpolation algorithms.
+
+        Args:
+            s_values: Array of s values (mass squared) where to evaluate the interpolation
+            mass_points: Array of mass points where interpolation is anchored
+            amplitudes: Array of amplitude values at the mass points
+
+        Returns:
+            Interpolated amplitude values at s_values
+
+        Raises:
+            NotImplementedError: This template function should be overridden
+        """
+        raise NotImplementedError("interpolate method must be implemented by specific interpolation classes")
+
+    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+        """
+        Call the interpolation lineshape.
+
+        This method handles the common logic for all interpolation classes
+        and delegates the actual interpolation to the interpolate method.
+
+        Args:
+            angular_momentum: Angular momentum parameter (not used for interpolation)
+            spin: Spin parameter (not used for interpolation)
+            *args: Positional parameter overrides (amplitudes)
+            s: Mandelstam variable s (mass squared) or array of s values
+            **kwargs: Keyword parameter overrides
+
+        Returns:
+            Interpolated amplitude values
+        """
+        s_val = s if s is not None else (self.s.value if self.s is not None else None)
+        if s_val is None:
+            raise ValueError("s must be provided either at construction or call time")
+        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
+
+    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
+        """
+        Call the interpolation lineshape.
+
+        This method handles the common logic for all interpolation classes
+        and delegates the actual interpolation to the interpolate method.
+
+        Args:
+            angular_momentum: Angular momentum parameter (not used for interpolation)
+            spin: Spin parameter (not used for interpolation)
+            *args: Positional parameter overrides (amplitudes)
+            s: Mandelstam variable s (mass squared) or array of s values
+            **kwargs: Keyword parameter overrides
+
+        Returns:
+            Interpolated amplitude values
+        """
+        # Get parameters with overrides
+        params = self._get_parameters(*args, **kwargs)
+        amplitudes = params["amplitudes"]
+
+        if self.complex.value:
+            # For complex interpolation, split amplitudes into real and imaginary parts
+            len(self.mass_points.value)
+            real_amplitudes = amplitudes[::2]  # Every other element starting from 0
+            imag_amplitudes = amplitudes[1::2]  # Every other element starting from 1
+
+            # Interpolate real and imaginary parts separately
+            real_result = self.interpolate(s, self.mass_points.value, real_amplitudes)
+            imag_result = self.interpolate(s, self.mass_points.value, imag_amplitudes)
+
+            # Return complex result
+            return real_result + 1j * imag_result
+        else:
+            # For real interpolation, use amplitudes directly
+            return self.interpolate(s, self.mass_points.value, amplitudes)
+
 
 class LinearInterpolation(InterpolationBase):
     """
@@ -286,32 +393,23 @@ class LinearInterpolation(InterpolationBase):
     amplitude parameters.
     """
 
-    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
+    def interpolate(self, s_values, mass_points, amplitudes):
         """
-        Evaluate the linear interpolated lineshape at given s values.
+        Perform linear interpolation.
 
         Args:
-            angular_momentum: Angular momentum parameter (not used for interpolation)
-            spin: Spin parameter (not used for interpolation)
-            s: Mandelstam variable s (mass squared) or array of s values
-            *args: Positional parameter overrides (amplitudes)
-            **kwargs: Keyword parameter overrides
+            s_values: Array of s values (mass squared) where to evaluate the interpolation
+            mass_points: Array of mass points where interpolation is anchored
+            amplitudes: Array of amplitude values at the mass points
 
         Returns:
             Linearly interpolated amplitude values
         """
-        # Get parameters with overrides
-        params = self._get_parameters(*args, **kwargs)
-
-        # Extract amplitude values
-        amplitudes = params["amplitudes"]
-
-        # Perform linear interpolation
         np = config.backend  # Get backend dynamically
 
         # Convert to arrays for vectorized operations
-        s_array = np.asarray(s)
-        mass_array = np.array(self.mass_points.value)
+        s_array = np.asarray(s_values)
+        mass_array = np.array(mass_points)
         amp_array = np.array(amplitudes)
 
         n_points = len(mass_array)
@@ -328,12 +426,6 @@ class LinearInterpolation(InterpolationBase):
             # numpy.interp handles extrapolation by using the nearest values
             return np.interp(s_array, mass_array, amp_array)
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
-        s_val = s if s is not None else (self.s.value if self.s is not None else None)
-        if s_val is None:
-            raise ValueError("s must be provided either at construction or call time")
-        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
-
 
 class QuadraticInterpolation(InterpolationBase):
     """
@@ -343,32 +435,23 @@ class QuadraticInterpolation(InterpolationBase):
     amplitude parameters. Uses Lagrange interpolation for JAX compatibility.
     """
 
-    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
+    def interpolate(self, s_values, mass_points, amplitudes):
         """
-        Evaluate the quadratic interpolated lineshape at given s values.
+        Perform quadratic interpolation.
 
         Args:
-            angular_momentum: Angular momentum parameter (not used for interpolation)
-            spin: Spin parameter (not used for interpolation)
-            s: Mandelstam variable s (mass squared) or array of s values
-            *args: Positional parameter overrides (amplitudes)
-            **kwargs: Keyword parameter overrides
+            s_values: Array of s values (mass squared) where to evaluate the interpolation
+            mass_points: Array of mass points where interpolation is anchored
+            amplitudes: Array of amplitude values at the mass points
 
         Returns:
             Quadratically interpolated amplitude values
         """
-        # Get parameters with overrides
-        params = self._get_parameters(*args, **kwargs)
-
-        # Extract amplitude values
-        amplitudes = params["amplitudes"]
-
-        # Perform quadratic interpolation
         np = config.backend  # Get backend dynamically
 
         # Convert to arrays for vectorized operations
-        s_array = np.asarray(s)
-        mass_array = np.array(self.mass_points.value)
+        s_array = np.asarray(s_values)
+        mass_array = np.array(mass_points)
         amp_array = np.array(amplitudes)
 
         n_points = len(mass_array)
@@ -421,12 +504,6 @@ class QuadraticInterpolation(InterpolationBase):
                 return result[0]
             return result
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
-        s_val = s if s is not None else (self.s.value if self.s is not None else None)
-        if s_val is None:
-            raise ValueError("s must be provided either at construction or call time")
-        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
-
 
 class CubicInterpolation(InterpolationBase):
     """
@@ -436,32 +513,23 @@ class CubicInterpolation(InterpolationBase):
     amplitude parameters. Uses Lagrange interpolation for JAX compatibility.
     """
 
-    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
+    def interpolate(self, s_values, mass_points, amplitudes):
         """
-        Evaluate the cubic interpolated lineshape at given s values.
+        Perform cubic interpolation.
 
         Args:
-            angular_momentum: Angular momentum parameter (not used for interpolation)
-            spin: Spin parameter (not used for interpolation)
-            s: Mandelstam variable s (mass squared) or array of s values
-            *args: Positional parameter overrides (amplitudes)
-            **kwargs: Keyword parameter overrides
+            s_values: Array of s values (mass squared) where to evaluate the interpolation
+            mass_points: Array of mass points where interpolation is anchored
+            amplitudes: Array of amplitude values at the mass points
 
         Returns:
             Cubically interpolated amplitude values
         """
-        # Get parameters with overrides
-        params = self._get_parameters(*args, **kwargs)
-
-        # Extract amplitude values
-        amplitudes = params["amplitudes"]
-
-        # Perform cubic interpolation
         np = config.backend  # Get backend dynamically
 
         # Convert to arrays for vectorized operations
-        s_array = np.asarray(s)
-        mass_array = np.array(self.mass_points.value)
+        s_array = np.asarray(s_values)
+        mass_array = np.array(mass_points)
         amp_array = np.array(amplitudes)
 
         n_points = len(mass_array)
@@ -537,9 +605,3 @@ class CubicInterpolation(InterpolationBase):
             if scalar_output:
                 return result[0]
             return result
-
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
-        s_val = s if s is not None else (self.s.value if self.s is not None else None)
-        if s_val is None:
-            raise ValueError("s must be provided either at construction or call time")
-        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
