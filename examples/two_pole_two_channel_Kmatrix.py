@@ -37,9 +37,12 @@ def create_threshold_kmatrix():
     kmat = ds.KMatrixAdvanced(
         s=s_values,
         channels=[pipi_channel, kk_channel],
-        pole_masses=[0.6, 0.97],  # First pole below ππ threshold, second above KK threshold
-        production_couplings=[1.0, 0.8],  # Different production strengths
-        decay_couplings=[1.0, 900.5, 9.3, 9.7],  # 2 poles × 2 channels = 4 couplings
+        pole_masses=[
+            0.6,
+            0.95,
+        ],  # First pole below ππ threshold, second above KK threshold
+        production_couplings=[0.1, 1],  # Different production strengths
+        decay_couplings=[0.1, 0.1, 0.1, 0.1],  # 2 poles × 2 channels = 4 couplings
         output_channel=0,  # Will be overridden for different channels
     )
 
@@ -83,14 +86,14 @@ def plot_kmatrix_channels():
     # Plot 1: Magnitude of both channels
     ax1.plot(
         mass_values,
-        np.abs(result_0) * kmat.channels.value[0].phase_space_factor(s_values),
+        np.abs(result_0),  # * kmat.channels.value[0].phase_space_factor(s_values),
         "b-",
         linewidth=2,
         label="ππ channel",
     )
     ax1.plot(
         mass_values,
-        np.abs(result_1) * kmat.channels.value[1].phase_space_factor(s_values),
+        np.abs(result_1),  # * kmat.channels.value[1].phase_space_factor(s_values),
         "r-",
         linewidth=2,
         label="KK channel",

@@ -245,10 +245,9 @@ class KMatrixAdvanced(Lineshape):
         self, params: dict[str, Any], s: Union[float, Any], n_poles: int, n_channels: int
     ) -> Union[float, Any]:
         """
-        Build the full T-matrix for all channels.
+        Build the K Matrix
 
-        T = K * (I - i*K*rho)^(-1)
-        where K is the K-matrix and rho is the phase space factor.
+        K_ij = sum_R (g_Ri * g_Rj) / (m_R^2 - s)
         """
         np = config.backend  # Get backend dynamically
         s_len = config.backend.shape(s)
@@ -269,7 +268,6 @@ class KMatrixAdvanced(Lineshape):
         for R in range(n_poles):
             m_R = pole_masses[R]
             denominator = m_R**2 - s
-
             # Handle the case where s equals a pole mass (add small epsilon)
             epsilon = 1e-15
             denominator = np.where(np.abs(denominator) < epsilon, epsilon, denominator)
@@ -277,10 +275,9 @@ class KMatrixAdvanced(Lineshape):
             # Get decay couplings for this pole
             g_R = g_matrix[R]  # Shape: (n_channels,)
             g_R_matrix = g_R[:, None] * g_R[None, :]  # Shape: (n_channels, n_channels)
-            print(g_R_matrix.shape)
+
             # target shape: (s_len, n_channels, n_channels)
             K += g_R_matrix / denominator[:, None, None]
-
         return K
 
     def _build_p_vector(
@@ -319,6 +316,12 @@ class KMatrixAdvanced(Lineshape):
         return P_vector
 
     def _build_amplitude(self, K, P, s, n_channels):
+        """
+        The P-Vector amplitude is given by
+
+        A_a = sum_c ((1 - iK rho )^-1)_ac P_c
+        """
+
         np = config.backend
 
         # Calculate phase space factors for each channel (vectorized)
@@ -340,7 +343,7 @@ class KMatrixAdvanced(Lineshape):
             # Fully vectorized calculation for all s values at once
             unity = np.eye(n_channels)
 
-            denominator_matrices = unity[None, :, :] - 1j * K @ rho_diag_matrix
+            denominator_matrices = unity[None, :, :] - (1j * K @ rho_diag_matrix)
 
         T = np.linalg.inv(denominator_matrices)
         A = sum(T[:, :, i] * P_val[:, None] for i, P_val in enumerate(P))
