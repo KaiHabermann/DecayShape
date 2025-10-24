@@ -344,9 +344,8 @@ class KMatrixAdvanced(Lineshape):
             unity = np.eye(n_channels)
 
             denominator_matrices = unity[None, :, :] - (1j * K @ rho_diag_matrix)
-
-        T = np.linalg.inv(denominator_matrices)
-        A = sum(T[:, :, i] * P_val[:, None] for i, P_val in enumerate(P))
+            T = np.linalg.inv(denominator_matrices)
+            A = sum(T[:, :, i] * P_val[:, None] for i, P_val in enumerate(P))
 
         return A.T
 
