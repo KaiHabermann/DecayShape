@@ -206,13 +206,13 @@ class KMatrixAdvanced(Lineshape):
         n_channels = len(self.channels.value)
 
         # Step 1: Build the full T-matrix
-        T_matrix = self._build_t_matrix(params, s, n_poles, n_channels)
+        K_matrix = self._build_k_matrix(params, s, n_poles, n_channels)
 
         # Step 2: Build the P-vector
         P_vector = self._build_p_vector(params, s, n_poles, n_channels)
 
         # Step 3: Build the F-vector
-        F_vector = self._build_f_vector(T_matrix, P_vector, s, n_channels)
+        A = self._build_amplitude(K_matrix, P_vector, s, n_channels)
 
         # Step 4: Return the specified channel of the F-vector
         output_idx = self.output_channel.value
@@ -230,10 +230,10 @@ class KMatrixAdvanced(Lineshape):
 
         if n_channels == 1:
             # Single channel: F_vector is already 1D
-            return F_vector * B
+            return A * B
         else:
             # Multi-channel: F_vector is 2D, return specified channel
-            return F_vector[output_idx, :] * B
+            return A[output_idx, :] * B
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
@@ -241,7 +241,7 @@ class KMatrixAdvanced(Lineshape):
             raise ValueError("s must be provided either at construction or call time")
         return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
-    def _build_t_matrix(
+    def _build_k_matrix(
         self, params: dict[str, Any], s: Union[float, Any], n_poles: int, n_channels: int
     ) -> Union[float, Any]:
         """
@@ -257,16 +257,9 @@ class KMatrixAdvanced(Lineshape):
         else:
             (s_len,) = s_len
 
-        # Calculate phase space factors for each channel (vectorized)
-        rho_list = []
-        for channel in self.channels.value:
-            val = channel.phase_space_factor(s)
-            rho_list.append(val)
-        rho = np.stack(rho_list, axis=0)
-
         # Build K-matrix: K_ij = sum_R (g_Ri * g_Rj) / (m_R^2 - s)
         # Vectorized approach: compute all pole contributions at once
-        K = np.zeros((n_channels, n_channels, s_len), dtype=complex)
+        K = np.zeros((s_len, n_channels, n_channels), dtype=complex)
 
         # Convert decay couplings to array for vectorized operations
         g_matrix = np.array(params["decay_couplings"]).reshape(n_poles, n_channels)
@@ -278,57 +271,17 @@ class KMatrixAdvanced(Lineshape):
             denominator = m_R**2 - s
 
             # Handle the case where s equals a pole mass (add small epsilon)
-            epsilon = 1e-10
+            epsilon = 1e-15
             denominator = np.where(np.abs(denominator) < epsilon, epsilon, denominator)
 
             # Get decay couplings for this pole
             g_R = g_matrix[R]  # Shape: (n_channels,)
+            g_R_matrix = g_R[:, None] * g_R[None, :]  # Shape: (n_channels, n_channels)
+            print(g_R_matrix.shape)
+            # target shape: (s_len, n_channels, n_channels)
+            K += g_R_matrix / denominator[:, None, None]
 
-            # Vectorized outer product: g_R[:, None] * g_R[None, :] gives (n_channels, n_channels)
-            # Then broadcast over s dimension: / denominator[None, None, :]
-            K += g_R[:, None, None] * g_R[None, :, None] / denominator[None, None, :]
-
-        # Calculate T-matrix: T = K * (I - i*K*rho)^(-1)
-        if n_channels == 1:
-            # Single channel: T = K / (1 - i*K*rho)
-            T_matrix = K[0, 0] / (1 - 1j * K[0, 0] * rho[0])
-        else:
-            # Multi-channel case: T = K * (I - i*K*rho)^(-1)
-            # Fully vectorized calculation for all s values at once
-            unity = np.eye(n_channels)
-
-            # Use np.diag to create diagonal matrices for all s values (n_channels, n_channels, s_len)
-            rho_diag = np.stack([np.diag(rho[:, i]) for i in range(s_len)], axis=-1)
-
-            # Compute denominator matrices for all s values
-            # I[:, :, None] broadcasts identity to (n_channels, n_channels, s_len)
-            # Use np.einsum for proper matrix multiplication over the last dimension
-            K_rho_product = np.einsum("ijl,jkl->ikl", K, rho_diag)  # (n_channels, n_channels, s_len)
-            denominator_matrices = unity[:, :, None] - 1j * K_rho_product
-
-            # Vectorized matrix inversion for all s values
-            try:
-                # Try to use vectorized solve: K @ inv(denominator_matrices)
-                # This is equivalent to solving: denominator_matrices @ T = K for T
-                T_matrix = np.linalg.solve(
-                    np.transpose(denominator_matrices, (2, 0, 1)),  # (s_len, n_channels, n_channels)
-                    np.transpose(K, (2, 0, 1)),  # (s_len, n_channels, n_channels)
-                )
-                T_matrix = np.transpose(T_matrix, (1, 2, 0))  # Back to (n_channels, n_channels, s_len)
-            except np.linalg.LinAlgError:
-                # Fallback to element-wise inversion if vectorized approach fails
-                T_matrix = np.zeros((n_channels, n_channels, s_len), dtype=complex)
-                for s_idx in range(s_len):
-                    K_s = K[:, :, s_idx]
-                    denominator_matrix = denominator_matrices[:, :, s_idx]
-
-                    det = np.linalg.det(denominator_matrix)
-                    if np.abs(det) < 1e-12:
-                        T_matrix[:, :, s_idx] = K_s @ np.linalg.pinv(denominator_matrix)
-                    else:
-                        T_matrix[:, :, s_idx] = K_s @ np.linalg.inv(denominator_matrix)
-
-        return T_matrix
+        return K
 
     def _build_p_vector(
         self, params: dict[str, Any], s: Union[float, Any], n_poles: int, n_channels: int
@@ -347,43 +300,26 @@ class KMatrixAdvanced(Lineshape):
         beta_array = np.array(params["production_couplings"])  # (n_poles,)
         pole_masses = np.array(params["pole_masses"])  # (n_poles,)
 
-        # Vectorized computation over all poles
-        # Shape manipulations for broadcasting:
-        # pole_masses: (n_poles,) -> (n_poles, 1) for broadcasting with s
-        # s: (s_len,) -> (1, s_len) for broadcasting with pole_masses
-        # Result denominator: (n_poles, s_len)
         denominators = pole_masses[:, None] ** 2 - s[None, :]  # (n_poles, s_len)
 
         # Handle the case where s equals a pole mass (add small epsilon)
-        epsilon = 1e-10
+        epsilon = 1e-15
         denominators = np.where(np.abs(denominators) < epsilon, epsilon, denominators)
-
-        # Vectorized P-vector computation:
-        # beta_array: (n_poles,) -> (n_poles, 1, 1) for broadcasting
-        # g_matrix: (n_poles, n_channels) -> (n_poles, n_channels, 1) for broadcasting with s
-        # denominators: (n_poles, s_len) -> (n_poles, 1, s_len) for broadcasting with channels
-        # Result: (n_poles, n_channels, s_len) -> sum over poles -> (n_channels, s_len)
 
         contributions = (
             beta_array[:, None, None] * g_matrix[:, :, None] / denominators[:, None, :]
         )  # (n_poles, n_channels, s_len)
-
         # Sum over all poles to get final P-vector
         P_vector = np.sum(contributions, axis=0)  # (n_channels, s_len)
 
+        # P_verctor_2 = sum(
+        #     beta_array[i] * g_matrix[i, :] / denominators[i, :, None] for i in range(n_poles)
+        # ).T
+
         return P_vector
 
-    def _build_f_vector(
-        self, T_matrix: Union[float, Any], P_vector: Union[float, Any], s: Union[float, Any], n_channels: int
-    ) -> Union[float, Any]:
-        """
-        Build the F-vector from T-matrix and P-vector.
-
-        F = (I - i*T*rho)^(-1) * P
-        where T is the T-matrix, rho is the phase space factor, and P is the P-vector.
-        """
-        np = config.backend  # Get backend dynamically
-        s_len = len(s)
+    def _build_amplitude(self, K, P, s, n_channels):
+        np = config.backend
 
         # Calculate phase space factors for each channel (vectorized)
         rho_list = []
@@ -392,34 +328,24 @@ class KMatrixAdvanced(Lineshape):
             rho_list.append(val)
         rho = np.stack(rho_list, axis=0)
 
-        # Build F-vector: F = (I - i*T*rho)^(-1) * P
+        # shape: (s_len, n_channels, n_channels)
+        rho_diag_matrix = np.eye(n_channels)[None, :, :] * rho.T[:, :, None]
+
+        # A_a = K_ac P^c
         if n_channels == 1:
-            # Single channel: F = P / (1 - i*T*rho)
-            F_vector = P_vector[0] / (1 - 1j * T_matrix * rho[0])
+            # Single channel: T = K / (1 - i*K*rho)
+            A = P[0] / (1 - 1j * K[0, 0] * rho[0])
         else:
-            # Multi-channel case: F = (I - i*T*rho)^(-1) * P
+            # Multi-channel case: T = K * (I - i*K*rho)^(-1)
             # Fully vectorized calculation for all s values at once
             unity = np.eye(n_channels)
 
-            # Create diagonal matrices for all s values: shape (n_channels, n_channels, s_len)
-            rho_diag = np.stack([np.diag(rho[:, i]) for i in range(s_len)], axis=-1)
+            denominator_matrices = unity[None, :, :] - 1j * K @ rho_diag_matrix
 
-            # Compute denominator matrices for all s values
-            # I[:, :, None] broadcasts identity to (n_channels, n_channels, s_len)
-            # Use np.einsum for proper matrix multiplication over the last dimension
-            T_rho_product = np.einsum("ijl,jkl->ikl", T_matrix, rho_diag)  # (n_channels, n_channels, s_len)
-            denominator_matrices = unity[:, :, None] - 1j * T_rho_product
+        T = np.linalg.inv(denominator_matrices)
+        A = sum(T[:, :, i] * P_val[:, None] for i, P_val in enumerate(P))
 
-            # Vectorized matrix solve for all s values
-            # Solve: denominator_matrices @ F = P for F
-            # Transpose to (s_len, n_channels, n_channels) for batch solve
-            F_matrix = np.linalg.solve(
-                np.transpose(denominator_matrices, (2, 0, 1)),  # (s_len, n_channels, n_channels)
-                np.transpose(P_vector, (1, 0))[:, :, None],  # (s_len, n_channels, 1)
-            )
-            F_vector = np.transpose(F_matrix[:, :, 0], (1, 0))  # Back to (n_channels, s_len)
-
-        return F_vector
+        return A.T
 
     def get_channel_info(self) -> dict[str, Any]:
         """Get information about all channels."""
