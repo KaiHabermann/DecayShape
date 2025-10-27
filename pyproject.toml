@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decayshape"
-version = "0.1.9"
+version = "0.1.10"
 description = "Lineshapes for hadron physics amplitude analysis"
 readme = "README.md"
 requires-python = ">=3.8"
