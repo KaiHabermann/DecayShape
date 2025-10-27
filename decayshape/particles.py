@@ -20,7 +20,7 @@ class Particle(BaseModel, JsonSchemaMixin):
     with its physical properties.
     """
 
-    mass: float = Field(..., description="Particle mass in GeV/c²")
+    mass: float = Field(..., description="Particle mass in MeV/c²")
     spin: float = Field(..., description="Particle spin (0, 0.5, 1, 1.5, 2, ...)")
     parity: int = Field(..., description="Particle parity (+1 or -1)")
 

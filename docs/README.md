@@ -24,7 +24,7 @@ The `lineshape_schemas.json` file contains complete schema information for each 
 
 The `particles.json` file contains physical properties of common particles used in hadron physics:
 
-- Mass (GeV/c²)
+- Mass (MeV/c²)
 - Spin quantum number
 - Parity quantum number
 
