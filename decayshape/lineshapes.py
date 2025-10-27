@@ -38,7 +38,10 @@ class RelativisticBreitWigner(Lineshape):
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
-        return ["pole_mass", "width", "r", "q0"]
+        params = ["pole_mass", "width", "r"]
+        if self.q0 is not None:
+            params.append("q0")
+        return params
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
@@ -109,14 +112,12 @@ class Flatte(Lineshape):
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
-        return ["pole_mass", "width1", "width2", "r1", "r2", "q01", "q02"]
-
-    def model_post_init(self, __context):
-        """Post-initialization to set q01, q02 if not provided."""
-        if self.q01 is None:
-            self.q01 = self.pole_mass / 2.0
-        if self.q02 is None:
-            self.q02 = self.pole_mass / 2.0
+        params = ["pole_mass", "width1", "width2", "r1", "r2"]
+        if self.q01 is not None:
+            params.append("q01")
+        if self.q02 is not None:
+            params.append("q02")
+        return params
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
@@ -134,6 +135,11 @@ class Flatte(Lineshape):
         """
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
+
+        if params["q01"] is None:
+            params["q01"] = self.channel1.value.momentum(params["pole_mass"] ** 2)
+        if params["q02"] is None:
+            params["q02"] = self.channel2.value.momentum(params["pole_mass"] ** 2)
 
         np = config.backend  # Get backend dynamically
 

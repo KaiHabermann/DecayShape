@@ -92,7 +92,9 @@ class KMatrixAdvanced(Lineshape):
                 params.append(f"decay_coupling_{pole_idx}_{channel_idx}")
 
         # Add other parameters
-        params.extend(["r", "q0"])
+        params.extend(["r"])
+        if self.q0 is not None:
+            params.append("q0")
 
         return params
 
@@ -103,17 +105,7 @@ class KMatrixAdvanced(Lineshape):
         # Start with optimization parameters
         params = self.get_optimization_parameters().copy()
         # Apply positional arguments
-        if args:
-            if len(args) > len(self.parameter_order):
-                raise ValueError(
-                    f"Too many positional arguments. Expected at most {len(self.parameter_order)}, got {len(args)}"
-                )
-
-            for i, value in enumerate(args):
-                param_name = self.parameter_order[i]
-                if param_name in kwargs:
-                    raise ValueError(f"Parameter '{param_name}' provided both positionally and as keyword argument")
-                kwargs[param_name] = value
+        args, kwargs = self._parse_args_and_kwargs(args, kwargs)
         # Convert flat parameters back to lists for internal use
         n_poles = len(self.pole_masses)
         n_channels = len(self.channels.value)

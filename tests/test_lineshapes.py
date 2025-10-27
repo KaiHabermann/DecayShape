@@ -71,6 +71,10 @@ class TestRelativisticBreitWigner:
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
         bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, pole_mass=0.775, width=0.15)
 
+        expected_order = ["pole_mass", "width", "r"]
+        assert bw.parameter_order == expected_order
+
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, pole_mass=0.775, width=0.15, q0=0.1)
         expected_order = ["pole_mass", "width", "r", "q0"]
         assert bw.parameter_order == expected_order
 

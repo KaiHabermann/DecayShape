@@ -390,6 +390,21 @@ class LineshapeBase(BaseModel):
 
         return values
 
+    def _parse_args_and_kwargs(self, args, kwargs):
+        """Parse positional and keyword arguments."""
+        if args:
+            if len(args) > len(self.parameter_order):
+                raise ValueError(
+                    f"Too many positional arguments. Expected at most {len(self.parameter_order)}, got {len(args)}"
+                )
+
+            for i, value in enumerate(args):
+                param_name = self.parameter_order[i]
+                if param_name in kwargs:
+                    raise ValueError(f"Parameter '{param_name}' provided both positionally and as keyword argument")
+                kwargs[param_name] = value
+        return args, kwargs
+
 
 class Lineshape(LineshapeBase, JsonSchemaMixin, ABC):
     """
@@ -457,24 +472,10 @@ class Lineshape(LineshapeBase, JsonSchemaMixin, ABC):
         """
         # Start with optimization parameters
         params = self.get_optimization_parameters().copy()
-
-        # Apply positional arguments
-        if args:
-            if len(args) > len(self.parameter_order):
-                raise ValueError(
-                    f"Too many positional arguments. Expected at most {len(self.parameter_order)}, got {len(args)}"
-                )
-
-            for i, value in enumerate(args):
-                param_name = self.parameter_order[i]
-                if param_name in kwargs:
-                    raise ValueError(f"Parameter '{param_name}' provided both positionally and as keyword argument")
-                params[param_name] = value
+        args, kwargs = self._parse_args_and_kwargs(args, kwargs)
 
         # Apply keyword arguments
         for param_name, value in kwargs.items():
-            if param_name in params and param_name in [self.parameter_order[i] for i in range(len(args))]:
-                raise ValueError(f"Parameter '{param_name}' provided both positionally and as keyword argument")
             params[param_name] = value
 
         return params
