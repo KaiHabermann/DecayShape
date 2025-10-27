@@ -102,7 +102,18 @@ class KMatrixAdvanced(Lineshape):
         """
         # Start with optimization parameters
         params = self.get_optimization_parameters().copy()
+        # Apply positional arguments
+        if args:
+            if len(args) > len(self.parameter_order):
+                raise ValueError(
+                    f"Too many positional arguments. Expected at most {len(self.parameter_order)}, got {len(args)}"
+                )
 
+            for i, value in enumerate(args):
+                param_name = self.parameter_order[i]
+                if param_name in kwargs:
+                    raise ValueError(f"Parameter '{param_name}' provided both positionally and as keyword argument")
+                kwargs[param_name] = value
         # Convert flat parameters back to lists for internal use
         n_poles = len(self.pole_masses)
         n_channels = len(self.channels.value)
@@ -218,11 +229,12 @@ class KMatrixAdvanced(Lineshape):
         output_idx = self.output_channel.value
 
         # Compute angular momentum barrier factor
-        q = config.backend.sqrt(s) / 2.0
+        q = self.channels.value[output_idx].momentum(s)
         L = angular_momentum // 2
 
         if params["q0"] is None:
-            params["q0"] = self.channels.value[self.output_channel.value].momentum(
+            print("q0 is None, setting to the momentum of the output channel")
+            params["q0"] = self.channels.value[output_idx].momentum(
                 config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
             )
 
