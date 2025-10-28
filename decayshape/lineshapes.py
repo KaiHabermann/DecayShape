@@ -259,6 +259,16 @@ class InterpolationBase(Lineshape):
     # Optimization parameters - amplitude values at mass points
     amplitudes: list[float] = Field(default_factory=list, description="Amplitude values at the mass points")
 
+    def _get_parameters(self, *args, **kwargs) -> dict[str, Any]:
+        """Get parameters with overrides from call arguments."""
+        args, kwargs = self._parse_args_and_kwargs(args, kwargs)
+        params = {
+            "amplitudes": [],
+        }
+        for name in self.parameter_order:
+            params["amplitudes"].append(kwargs[name])
+        return params
+
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
