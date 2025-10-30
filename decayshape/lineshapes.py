@@ -265,8 +265,8 @@ class InterpolationBase(Lineshape):
         params = {
             "amplitudes": [],
         }
-        for name in self.parameter_order:
-            params["amplitudes"].append(kwargs[name])
+        for name, default_value in zip(self.parameter_order, self.amplitudes):
+            params["amplitudes"].append(kwargs.get(name, default_value))
         return params
 
     @property
