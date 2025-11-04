@@ -3,17 +3,22 @@ Base classes for lineshapes in hadron physics.
 
 Provides abstract base class that all lineshapes must implement using Pydantic.
 """
-
 import json
 from abc import ABC, abstractmethod
 from typing import Any, Generic, Optional, TypeVar, Union, get_args, get_origin
 
+import jax.numpy as jnp
+import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .config import config
 
 # Template type for marking fixed parameters
 T = TypeVar("T")
+
+# Type for general numerical values. float, np.array, jax.numpy.array, etc.
+
+Numerical = Union[float, np.ndarray, jnp.ndarray]
 
 
 class JsonSchemaMixin:
@@ -120,6 +125,31 @@ class JsonSchemaMixin:
         # Handle generic types
         origin = get_origin(type_hint)
         args = get_args(type_hint)
+
+        # Handle Numerical type (Union[float, np.ndarray, jnp.ndarray]) as float
+        # Check if this is the Numerical type or matches its Union structure
+        if type_hint is Numerical:
+            return {"type": "number"}
+
+        # Check if this Union matches Numerical (treat as float)
+        if origin is Union:
+            # Check if all args are float, np.ndarray, or jnp.ndarray types
+            # This matches the Numerical type definition
+            try:
+                import jax.numpy as jnp
+                import numpy as np
+
+                all_numerical = all(
+                    arg is float
+                    or arg is np.ndarray
+                    or arg is jnp.ndarray
+                    or (hasattr(arg, "__name__") and arg.__name__ in ("ndarray", "Array"))
+                    for arg in args
+                )
+                if all_numerical and len(args) > 0:
+                    return {"type": "number"}
+            except ImportError:
+                pass
 
         if origin is list:
             item_type = args[0] if args else Any

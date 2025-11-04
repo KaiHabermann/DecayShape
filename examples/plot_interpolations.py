@@ -11,7 +11,11 @@ lin = LinearInterpolation(mass_points=mass_points, amplitudes=amplitudes)
 quad = QuadraticInterpolation(mass_points=mass_points, amplitudes=amplitudes)
 cub = CubicInterpolation(mass_points=mass_points, amplitudes=amplitudes)
 
-y_lin = lin(0, 1, s=s)
+y_lin = lin(
+    0,
+    1,
+    s=s,
+)
 y_quad = quad(0, 1, s=s)
 y_cub = cub(0, 1, s=s)
 

@@ -257,7 +257,10 @@ class InterpolationBase(Lineshape):
     )
 
     # Optimization parameters - amplitude values at mass points
-    amplitudes: list[float] = Field(default_factory=list, description="Amplitude values at the mass points")
+    amplitudes: list[float] = Field(
+        default_factory=list,
+        description="Amplitude values at the mass points. Leave empty to use default values. Otherwise, provide the amplitude values in the order of the mass points (n_amplitudes = n_mass_points or n_amplitudes = 2 * n_mass_points for complex interpolation).",
+    )
 
     def _get_parameters(self, *args, **kwargs) -> dict[str, Any]:
         """Get parameters with overrides from call arguments."""
