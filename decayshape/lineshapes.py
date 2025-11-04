@@ -227,7 +227,7 @@ class Gaussian(Lineshape):
         # Calculate the square root of the Gaussian PDF
         # sqrt(1/(width*sqrt(2π))) * exp(-(s-mean)²/(4*width²))
         normalization = 1.0 / np.sqrt(width * np.sqrt(2 * np.pi))
-        exponent = -((s - mean) ** 2) / (4 * width**2)
+        exponent = -((s**0.5 - mean) ** 2) / (4 * width**2)
 
         return normalization * np.exp(exponent)
 
