@@ -229,7 +229,7 @@ class Gaussian(Lineshape):
         normalization = 1.0 / np.sqrt(width * np.sqrt(2 * np.pi))
         exponent = -((s**0.5 - mean) ** 2) / (4 * width**2)
 
-        return normalization * np.exp(exponent)
+        return np.sqrt(normalization * np.exp(exponent))
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
