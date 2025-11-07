@@ -296,7 +296,12 @@ class KMatrixAdvanced(Lineshape):
 
         # Convert decay couplings to array for vectorized operations
         g_matrix = np.array(params["decay_couplings"]).reshape(n_poles, n_channels)
-        background = np.array(params.get("background", [0] * n_poles * n_channels)).reshape(n_poles, n_channels)
+        background = params.get("background", None)
+        if background is not None:
+            background = np.array(background).reshape(n_poles, n_channels)
+        else:
+            background = np.zeros((n_poles, n_channels), dtype=complex)
+
         pole_masses = np.array(params["pole_masses"])
 
         # Vectorized computation over all poles and s values
