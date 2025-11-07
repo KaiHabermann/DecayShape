@@ -42,6 +42,9 @@ class KMatrixAdvanced(Lineshape):
     r: float = Field(default=1.0, description="Hadron radius parameter")
 
     background: Optional[list[float]] = Field(default=None, description="Background terms. Length = n_poles x n_channels")
+    production_background: Optional[list[float]] = Field(
+        default=None, description="Production background terms. Length = n_channels"
+    )
     q0: Optional[float] = Field(default=None, description="Reference momentum")
 
     class Config:
@@ -71,7 +74,11 @@ class KMatrixAdvanced(Lineshape):
 
         if self.background is not None:
             if len(self.background) != n_poles * n_channels:
-                raise ValueError(f"background must have length {n_channels}, got {len(self.background)}")
+                raise ValueError(f"background must have length {n_poles * n_channels}, got {len(self.background)}")
+
+        if self.production_background is not None:
+            if len(self.production_background) != n_channels:
+                raise ValueError(f"production_background must have length {n_channels}, got {len(self.production_background)}")
 
         return self
 
@@ -102,6 +109,11 @@ class KMatrixAdvanced(Lineshape):
             for pole_idx in range(n_poles):
                 for channel_idx in range(n_channels):
                     params.append(f"background_{pole_idx}_{channel_idx}")
+
+        # Add production background terms
+        if self.production_background is not None:
+            for channel_idx in range(n_channels):
+                params.append(f"production_background_{channel_idx}")
 
         # Add other parameters
         params.extend(["r"])
@@ -166,6 +178,18 @@ class KMatrixAdvanced(Lineshape):
                     else:
                         background.append(self.background[flat_idx])
             params["background"] = background
+
+        # Handle production background terms
+        if self.production_background is not None:
+            production_background = []
+            for channel_idx in range(n_channels):
+                param_name = f"production_background_{channel_idx}"
+                if param_name in kwargs:
+                    production_background.append(kwargs[param_name])
+                else:
+                    production_background.append(self.production_background[channel_idx])
+            params["production_background"] = production_background
+
         # Handle other parameters
         for param_name in ["r", "q0"]:
             if param_name in kwargs:
@@ -209,6 +233,11 @@ class KMatrixAdvanced(Lineshape):
                 for channel_idx in range(n_channels):
                     flat_idx = pole_idx * n_channels + channel_idx
                     param_dict[f"background_{pole_idx}_{channel_idx}"] = self.background[flat_idx]
+
+        # Add production background terms
+        if self.production_background is not None:
+            for channel_idx in range(n_channels):
+                param_dict[f"production_background_{channel_idx}"] = self.production_background[channel_idx]
 
         # Add other parameters
         param_dict["r"] = self.r
@@ -350,9 +379,11 @@ class KMatrixAdvanced(Lineshape):
         # Sum over all poles to get final P-vector
         P_vector = np.sum(contributions, axis=0)  # (n_channels, s_len)
 
-        # P_verctor_2 = sum(
-        #     beta_array[i] * g_matrix[i, :] / denominators[i, :, None] for i in range(n_poles)
-        # ).T
+        # Add production background terms if present
+        production_background = params.get("production_background", None)
+        if production_background is not None:
+            production_background_array = np.array(production_background)  # (n_channels,)
+            P_vector = P_vector + production_background_array[:, None]  # (n_channels, s_len)
 
         return P_vector
 
