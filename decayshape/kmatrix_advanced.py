@@ -40,6 +40,11 @@ class KMatrixAdvanced(Lineshape):
         default_factory=list, description="Decay couplings from each pole to each channel (length = n_poles × n_channels)"
     )
     r: float = Field(default=1.0, description="Hadron radius parameter")
+
+    background: Optional[list[float]] = Field(default=None, description="Background terms. Length = n_poles x n_channels")
+    production_background: Optional[list[float]] = Field(
+        default=None, description="Production background terms. Length = n_channels"
+    )
     q0: Optional[float] = Field(default=None, description="Reference momentum")
 
     class Config:
@@ -67,6 +72,14 @@ class KMatrixAdvanced(Lineshape):
         elif len(self.decay_couplings) != n_poles * n_channels:
             raise ValueError(f"decay_couplings must have length {n_poles * n_channels}, got {len(self.decay_couplings)}")
 
+        if self.background is not None:
+            if len(self.background) != n_poles * n_channels:
+                raise ValueError(f"background must have length {n_poles * n_channels}, got {len(self.background)}")
+
+        if self.production_background is not None:
+            if len(self.production_background) != n_channels:
+                raise ValueError(f"production_background must have length {n_channels}, got {len(self.production_background)}")
+
         return self
 
     @property
@@ -90,6 +103,17 @@ class KMatrixAdvanced(Lineshape):
         for pole_idx in range(n_poles):
             for channel_idx in range(n_channels):
                 params.append(f"decay_coupling_{pole_idx}_{channel_idx}")
+
+        # Add background terms
+        if self.background is not None:
+            for pole_idx in range(n_poles):
+                for channel_idx in range(n_channels):
+                    params.append(f"background_{pole_idx}_{channel_idx}")
+
+        # Add production background terms
+        if self.production_background is not None:
+            for channel_idx in range(n_channels):
+                params.append(f"production_background_{channel_idx}")
 
         # Add other parameters
         params.extend(["r"])
@@ -142,6 +166,30 @@ class KMatrixAdvanced(Lineshape):
                     decay_couplings.append(self.decay_couplings[flat_idx])
         params["decay_couplings"] = decay_couplings
 
+        # Handle background terms
+        if self.background is not None:
+            background = []
+            for pole_idx in range(n_poles):
+                for channel_idx in range(n_channels):
+                    flat_idx = pole_idx * n_channels + channel_idx
+                    param_name = f"background_{pole_idx}_{channel_idx}"
+                    if param_name in kwargs:
+                        background.append(kwargs[param_name])
+                    else:
+                        background.append(self.background[flat_idx])
+            params["background"] = background
+
+        # Handle production background terms
+        if self.production_background is not None:
+            production_background = []
+            for channel_idx in range(n_channels):
+                param_name = f"production_background_{channel_idx}"
+                if param_name in kwargs:
+                    production_background.append(kwargs[param_name])
+                else:
+                    production_background.append(self.production_background[channel_idx])
+            params["production_background"] = production_background
+
         # Handle other parameters
         for param_name in ["r", "q0"]:
             if param_name in kwargs:
@@ -178,6 +226,18 @@ class KMatrixAdvanced(Lineshape):
             for channel_idx in range(n_channels):
                 flat_idx = pole_idx * n_channels + channel_idx
                 param_dict[f"decay_coupling_{pole_idx}_{channel_idx}"] = self.decay_couplings[flat_idx]
+
+        # Add background terms
+        if self.background is not None:
+            for pole_idx in range(n_poles):
+                for channel_idx in range(n_channels):
+                    flat_idx = pole_idx * n_channels + channel_idx
+                    param_dict[f"background_{pole_idx}_{channel_idx}"] = self.background[flat_idx]
+
+        # Add production background terms
+        if self.production_background is not None:
+            for channel_idx in range(n_channels):
+                param_dict[f"production_background_{channel_idx}"] = self.production_background[channel_idx]
 
         # Add other parameters
         param_dict["r"] = self.r
@@ -225,7 +285,6 @@ class KMatrixAdvanced(Lineshape):
         L = angular_momentum // 2
 
         if params["q0"] is None:
-            print("q0 is None, setting to the momentum of the output channel")
             params["q0"] = self.channels.value[output_idx].momentum(
                 config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
             )
@@ -266,6 +325,12 @@ class KMatrixAdvanced(Lineshape):
 
         # Convert decay couplings to array for vectorized operations
         g_matrix = np.array(params["decay_couplings"]).reshape(n_poles, n_channels)
+        background = params.get("background", None)
+        if background is not None:
+            background = np.array(background).reshape(n_poles, n_channels)
+        else:
+            background = np.zeros((n_poles, n_channels), dtype=complex)
+
         pole_masses = np.array(params["pole_masses"])
 
         # Vectorized computation over all poles and s values
@@ -278,10 +343,11 @@ class KMatrixAdvanced(Lineshape):
 
             # Get decay couplings for this pole
             g_R = g_matrix[R]  # Shape: (n_channels,)
+            background_R = background[R]
             g_R_matrix = g_R[:, None] * g_R[None, :]  # Shape: (n_channels, n_channels)
 
             # target shape: (s_len, n_channels, n_channels)
-            K += g_R_matrix / denominator[:, None, None]
+            K += g_R_matrix / denominator[:, None, None] + background_R
         return K
 
     def _build_p_vector(
@@ -313,9 +379,11 @@ class KMatrixAdvanced(Lineshape):
         # Sum over all poles to get final P-vector
         P_vector = np.sum(contributions, axis=0)  # (n_channels, s_len)
 
-        # P_verctor_2 = sum(
-        #     beta_array[i] * g_matrix[i, :] / denominators[i, :, None] for i in range(n_poles)
-        # ).T
+        # Add production background terms if present
+        production_background = params.get("production_background", None)
+        if production_background is not None:
+            production_background_array = np.array(production_background)  # (n_channels,)
+            P_vector = P_vector + production_background_array[:, None]  # (n_channels, s_len)
 
         return P_vector
 

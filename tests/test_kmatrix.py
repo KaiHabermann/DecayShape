@@ -298,3 +298,202 @@ class TestKMatrixPhysics:
 
         # Results should be different
         assert not np.allclose(result_strong, result_weak)
+
+    def test_kmatrix_with_background_terms(self, sample_s_values):
+        """Test K-matrix with background terms (3 poles, 2 channels)."""
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+
+        # 3 poles, 2 channels
+        pole_masses = [0.6, 0.8, 1.0]
+        production_couplings = [1.0, 0.8, 0.6]
+        decay_couplings = [1.0, 0.5, 0.3, 0.7, 0.4, 0.9]  # 3 poles × 2 channels = 6
+        background = [0.1, 0.2, 0.15, 0.25, 0.2, 0.3]  # 3 poles × 2 channels = 6
+
+        kmat = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            background=background,
+            output_channel=0,
+        )
+
+        assert len(kmat.pole_masses) == 3
+        assert len(kmat.channels.value) == 2
+        assert kmat.background is not None
+        assert len(kmat.background) == 6
+
+        result = kmat(1, 2)
+
+        assert isinstance(result, np.ndarray)
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))
+
+        kmat_no_background = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            output_channel=0,
+        )
+
+        result_no_background = kmat_no_background(1, 2)
+
+        assert not np.allclose(result, result_no_background)
+
+        background_zero = [0.0] * 6  # 3 poles × 2 channels = 6
+
+        kmat_zero_background = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            background=background_zero,
+            output_channel=0,
+        )
+
+        result_zero_background = kmat_zero_background(1, 2)
+
+        assert np.allclose(result_no_background, result_zero_background)
+
+    def test_kmatrix_with_production_background(self, sample_s_values):
+        """Test K-matrix with production background terms (3 poles, 2 channels)."""
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+
+        # 3 poles, 2 channels
+        pole_masses = [0.6, 0.8, 1.0]
+        production_couplings = [1.0, 0.8, 0.6]
+        decay_couplings = [1.0, 0.5, 0.3, 0.7, 0.4, 0.9]  # 3 poles × 2 channels = 6
+        production_background = [0.1, 0.2]  # 2 channels
+
+        kmat = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            production_background=production_background,
+            output_channel=0,
+        )
+
+        assert len(kmat.pole_masses) == 3
+        assert len(kmat.channels.value) == 2
+        assert kmat.production_background is not None
+        assert len(kmat.production_background) == 2
+
+        result = kmat(1, 2)
+
+        assert isinstance(result, np.ndarray)
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))
+
+        kmat_no_production_background = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            output_channel=0,
+        )
+
+        result_no_production_background = kmat_no_production_background(1, 2)
+
+        assert not np.allclose(result, result_no_production_background)
+
+        production_background_zero = [0.0, 0.0]  # 2 channels
+
+        kmat_zero_production_background = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            production_background=production_background_zero,
+            output_channel=0,
+        )
+
+        result_zero_production_background = kmat_zero_production_background(1, 2)
+
+        assert np.allclose(result_no_production_background, result_zero_production_background)
+
+    def test_kmatrix_with_both_backgrounds(self, sample_s_values):
+        """Test K-matrix with both background and production_background terms (3 poles, 2 channels)."""
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+
+        # 3 poles, 2 channels
+        pole_masses = [0.6, 0.8, 1.0]
+        production_couplings = [1.0, 0.8, 0.6]
+        decay_couplings = [1.0, 0.5, 0.3, 0.7, 0.4, 0.9]  # 3 poles × 2 channels = 6
+        background = [0.1, 0.2, 0.15, 0.25, 0.2, 0.3]  # 3 poles × 2 channels = 6
+        production_background = [0.05, 0.1]  # 2 channels
+
+        kmat = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            background=background,
+            production_background=production_background,
+            output_channel=0,
+        )
+
+        assert len(kmat.pole_masses) == 3
+        assert len(kmat.channels.value) == 2
+        assert kmat.background is not None
+        assert len(kmat.background) == 6
+        assert kmat.production_background is not None
+        assert len(kmat.production_background) == 2
+
+        result = kmat(1, 2)
+
+        assert isinstance(result, np.ndarray)
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))
+
+        kmat_only_background = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            background=background,
+            output_channel=0,
+        )
+
+        result_only_background = kmat_only_background(1, 2)
+
+        assert not np.allclose(result, result_only_background)
+
+        kmat_only_production_background = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            production_background=production_background,
+            output_channel=0,
+        )
+
+        result_only_production_background = kmat_only_production_background(1, 2)
+
+        assert not np.allclose(result, result_only_production_background)
+
+        kmat_no_backgrounds = KMatrixAdvanced(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            pole_masses=pole_masses,
+            production_couplings=production_couplings,
+            decay_couplings=decay_couplings,
+            output_channel=0,
+        )
+
+        result_no_backgrounds = kmat_no_backgrounds(1, 2)
+
+        assert not np.allclose(result, result_no_backgrounds)
