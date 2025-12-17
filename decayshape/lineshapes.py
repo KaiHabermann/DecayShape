@@ -146,15 +146,15 @@ class Flatte(Lineshape):
         # Calculate momenta in both channels using Channel objects
         # Channel 1 momentum
         channel1 = self.channel1.value
-        m1_1 = channel1.particle1.value.mass
-        m1_2 = channel1.particle2.value.mass
-        q1 = np.sqrt((s - (m1_1 + m1_2) ** 2) * (s - (m1_1 - m1_2) ** 2)) / (2 * np.sqrt(s))
+        channel1.particle1.value.mass
+        channel1.particle2.value.mass
+        q1 = channel1.momentum(s)
 
         # Channel 2 momentum
         channel2 = self.channel2.value
-        m2_1 = channel2.particle1.value.mass
-        m2_2 = channel2.particle2.value.mass
-        q2 = np.sqrt((s - (m2_1 + m2_2) ** 2) * (s - (m2_1 - m2_2) ** 2)) / (2 * np.sqrt(s))
+        channel2.particle1.value.mass
+        channel2.particle2.value.mass
+        q2 = channel2.momentum(s)
 
         # Convert doubled angular momentum to actual L value
         L = angular_momentum // 2
@@ -171,7 +171,8 @@ class Flatte(Lineshape):
         # Flatté denominator (use optimization parameter pole_mass)
         denominator = s - params["pole_mass"] ** 2 + 1j * params["pole_mass"] * total_width
 
-        return 1.0 / denominator
+        numerator = params["pole_mass"] * np.sqrt(params["width1"] * F1 * B1 * params["width2"] * F2 * B2)
+        return numerator / denominator
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
