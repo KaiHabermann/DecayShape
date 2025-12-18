@@ -65,18 +65,31 @@ def angular_momentum_barrier_factor(q: Union[float, Any], q0: Union[float, Any],
         return (q / q0) ** L
 
 
+def phase_space_factor(q_s: Union[float, Any], s: Union[float, Any]) -> Union[float, Any]:
+    """
+    Calculate the phase space factor.
+    """
+    return 2 * q_s / s**0.5
+
+
 def mass_dependent_width(
     q_s: Union[float, Any], s: Union[float, Any], q0: Union[float, Any], m0: float, gamma0: float, L: int, r: float
 ) -> Union[float, Any]:
     """
     Calculate the mass-dependent width.
     """
+    rho = phase_space_factor(q_s, s)
+    rho0 = phase_space_factor(q0, s)
     return (
         gamma0
-        * (q_s / q0) ** (2 * L)
-        * (m0 / s**0.5)
-        * blatt_weiskopf_form_factor(q_s, r, L) ** 2
-        / blatt_weiskopf_form_factor(q0, r, L) ** 2
+        * rho
+        / rho0
+        * (
+            angular_momentum_barrier_factor(q_s, q0, L)
+            * blatt_weiskopf_form_factor(q_s, r, L)
+            / blatt_weiskopf_form_factor(q0, r, L)
+        )
+        ** 2
     )
 
 

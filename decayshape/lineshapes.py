@@ -292,8 +292,6 @@ class Flatte(Lineshape):
         if params["q02"] is None:
             params["q02"] = self.channel2.value.momentum(params["pole_mass"] ** 2)
 
-        np = config.backend  # Get backend dynamically
-
         # Calculate momenta in both channels using Channel objects
         # Channel 1 momentum
         channel1 = self.channel1.value
@@ -307,8 +305,6 @@ class Flatte(Lineshape):
         channel2.particle2.value.mass
         q2 = channel2.momentum(s)
 
-        q2 = np.sqrt(s / 4 + 0j - channel2.particle1.value.mass**2)
-
         # Convert doubled angular momentum to actual L value
         L = angular_momentum // 2
 
@@ -318,19 +314,17 @@ class Flatte(Lineshape):
         angular_momentum_barrier_factor(q1, params["q01"], L)
         angular_momentum_barrier_factor(q2, params["q02"], L)
 
-        gamma1 = params["width1"] * q1
-        params["width2"] * q2
+        gamma1 = mass_dependent_width(q1, s, params["q01"], params["pole_mass"], params["width1"], L, params["r1"])
+        gamma2 = mass_dependent_width(q2, s, params["q02"], params["pole_mass"], params["width2"], L, params["r2"])
 
         # Total width
-        total_width = mass_dependent_width(
-            q1, s, params["q01"], params["pole_mass"], params["width1"], angular_momentum // 2, params["r1"]
-        ) + mass_dependent_width(
-            q2, s, params["q02"], params["pole_mass"], params["width2"], angular_momentum // 2, params["r2"]
-        )  # TODO: here the angular momentum of the other channel should be used
+        total_width = gamma1 + gamma2
         # Flatté denominator (use optimization parameter pole_mass)
         denominator = params["pole_mass"] ** 2 - s - 1j * params["pole_mass"] * total_width
 
-        numerator = params["pole_mass"] * gamma1
+        numerator = params["pole_mass"] * mass_dependent_width(
+            q1, s, params["q01"], params["pole_mass"], gamma1, L, params["r1"]
+        )
         return numerator / denominator
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
