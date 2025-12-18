@@ -99,36 +99,41 @@ class GounarisSakurai(Lineshape):
     The lineshape is defined as:
 
     .. math::
+        T(s) = \\frac{1 + d \\frac{\\Gamma_0}{m_0}}{m_0^2 - s + f(s) - i m_0 \\Gamma(s)}
 
-        A(s) = \\frac{1 + d \\cdot \\Gamma_0 / m_0}{m_0^2 - s + f(s) - i m_0 \\Gamma(s)}
-
-    where:
+    where :math:`\\Gamma(s)` is the energy-dependent width:
 
     .. math::
-
         \\Gamma(s) = \\Gamma_0 \\left(\\frac{q}{q_0}\\right)^3 \\frac{m_0}{\\sqrt{s}}
 
     and the function :math:`f(s)` is given by:
 
     .. math::
-
         f(s) = \\frac{\\Gamma_0 m_0^2}{q_0^3} \\left[ q^2 (h(s) - h(m_0^2)) + (m_0^2 - s) q_0^2 h'(m_0^2) \\right]
 
-    with:
+    with :math:`h(s)` defined as:
 
     .. math::
-
         h(s) = \\frac{2}{\\pi} \\frac{q}{\\sqrt{s}} \\ln\\left(\\frac{\\sqrt{s} + 2q}{2m_\\pi}\\right)
 
-    and :math:`d = f'(m_0^2)`.
+    and :math:`d = h'(m_0^2)`.
+
+    This implementation also includes an optional :math:`\\omega` interference term:
+
+    .. math::
+        T_{total}(s) = T(s) \\times \\frac{1 + \\delta \\frac{s}{m_\\omega^2 - s - i m_\\omega \\Gamma_\\omega}}{1 + \\delta}
     """
 
     # Fixed parameters
     channel: FixedParam[Channel] = Field(..., description="Decay channel (usually pi+pi-)")
 
     # Optimization parameters
-    pole_mass: float = Field(default=0.775, description="Pole mass of the resonance (m0)")
-    width: float = Field(default=0.15, description="Resonance width (Gamma0)")
+    pole_mass: float = Field(default=775, description="Pole mass of the resonance (m0)")
+    width: float = Field(default=150, description="Resonance width (Gamma0)")
+    omega_mass: float = Field(default=782.65, description="Omega mass or mass of interfering particle")
+    omega_width: float = Field(default=8.49, description="Omega width or width of interfering particle")
+    delta_mag: float = Field(default=0.0002, description="Magnitude of interfering particle")
+    delta_phi: float = Field(default=1.65, description="Phase of interfering particle in radians")
     q0: Optional[float] = Field(default=None, description="Reference momentum (calculated from channel if None)")
 
     @property
@@ -220,7 +225,12 @@ class GounarisSakurai(Lineshape):
         # D(s) = m0^2 - s + f(s) - i * m0 * Gamma(s)
         denominator = m0_sq - s_val + f_val - 1j * m0 * gamma_s
 
-        return numerator / denominator
+        delta = params["delta_mag"] * np.exp(1j * params["delta_phi"])
+        omega_term = (1 + delta * s / (params["omega_mass"] ** 2 - s - 1j * params["omega_mass"] * params["omega_width"])) / (
+            1 + delta
+        )
+
+        return numerator / denominator * omega_term
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)

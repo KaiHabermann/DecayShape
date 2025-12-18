@@ -14,7 +14,16 @@ pipi = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_M
 
 # Instantiate Gounaris-Sakurai lineshape
 # Note: GS is specifically designed for P-wave (L=1) resonances like rho
-gs = GounarisSakurai(s=s, channel=FixedParam(value=pipi), pole_mass=0.775, width=0.150)
+gs = GounarisSakurai(
+    s=s,
+    channel=FixedParam(value=pipi),
+    pole_mass=0.775,
+    width=0.150,
+    omega_mass=0.78265,
+    omega_width=0.00849,
+    delta_mag=0.002,
+    delta_phi=1.65,
+)
 
 # Instantiate Relativistic Breit-Wigner for comparison
 rbw = RelativisticBreitWigner(
@@ -45,7 +54,6 @@ plt.ylabel("Intensity $|A|^2$")
 plt.title(r"$\rho(770) \to \pi^+ \pi^-$ Lineshape Comparison")
 plt.legend()
 plt.grid(True, alpha=0.3)
-plt.xlim(0.3, 1.2)
 
 plt.tight_layout()
 plt.savefig("gounaris_sakurai_rho.png", dpi=150)
