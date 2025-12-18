@@ -88,6 +88,147 @@ class RelativisticBreitWigner(Lineshape):
         return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
 
+class GounarisSakurai(Lineshape):
+    """
+    Gounaris-Sakurai lineshape.
+
+    A modification of the Breit-Wigner shape used to describe the rho meson
+    in the pi-pi spectrum, accounting for the energy dependence of the width
+    and phase space factors.
+
+    The lineshape is defined as:
+
+    .. math::
+
+        A(s) = \\frac{1 + d \\cdot \\Gamma_0 / m_0}{m_0^2 - s + f(s) - i m_0 \\Gamma(s)}
+
+    where:
+
+    .. math::
+
+        \\Gamma(s) = \\Gamma_0 \\left(\\frac{q}{q_0}\\right)^3 \\frac{m_0}{\\sqrt{s}}
+
+    and the function :math:`f(s)` is given by:
+
+    .. math::
+
+        f(s) = \\frac{\\Gamma_0 m_0^2}{q_0^3} \\left[ q^2 (h(s) - h(m_0^2)) + (m_0^2 - s) q_0^2 h'(m_0^2) \\right]
+
+    with:
+
+    .. math::
+
+        h(s) = \\frac{2}{\\pi} \\frac{q}{\\sqrt{s}} \\ln\\left(\\frac{\\sqrt{s} + 2q}{2m_\\pi}\\right)
+
+    and :math:`d = f'(m_0^2)`.
+    """
+
+    # Fixed parameters
+    channel: FixedParam[Channel] = Field(..., description="Decay channel (usually pi+pi-)")
+
+    # Optimization parameters
+    pole_mass: float = Field(default=0.775, description="Pole mass of the resonance (m0)")
+    width: float = Field(default=0.15, description="Resonance width (Gamma0)")
+    q0: Optional[float] = Field(default=None, description="Reference momentum (calculated from channel if None)")
+
+    @property
+    def parameter_order(self) -> list[str]:
+        """Return the order of parameters for positional arguments."""
+        params = ["pole_mass", "width"]
+        if self.q0 is not None:
+            params.append("q0")
+        return params
+
+    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
+        """
+        Evaluate the Gounaris-Sakurai lineshape at given s values.
+
+        Args:
+            angular_momentum: Angular momentum parameter (usually 2 for P-wave)
+            spin: Spin parameter (usually 2 for rho)
+            s: Mandelstam variable s (mass squared) or array of s values
+            *args: Positional parameter overrides (pole_mass, width, q0)
+            **kwargs: Keyword parameter overrides
+
+        Returns:
+            Gounaris-Sakurai amplitude
+        """
+        # Get parameters with overrides
+        params = self._get_parameters(*args, **kwargs)
+
+        m0 = params["pole_mass"]
+        gamma0 = params["width"]
+        s_val = s
+
+        # Calculate derived quantities
+        m0_sq = m0**2
+
+        # If q0 is not provided, calculate it at pole mass
+        if params["q0"] is None:
+            params["q0"] = self.channel.value.momentum(m0_sq)
+
+        q0 = params["q0"]
+        q = self.channel.momentum(s_val)
+
+        # Get backend
+        np = config.backend
+
+        # Determine pion mass (assume channel is pi+pi- or similar symmetric channel)
+        # Using particle1 mass as pion mass
+        m_pi = self.channel.value.particle1.value.mass
+
+        # Calculate m = sqrt(s)
+        m = np.sqrt(s_val)
+
+        # Function h(m)
+        def h_func(m_val, q_val):
+            # h(m) = (2/pi) * (q/m) * ln((m + 2q)/(2*m_pi))
+            return (2.0 / np.pi) * (q_val / m_val) * np.log((m_val + 2 * q_val) / (2 * m_pi))
+
+        h_m = h_func(m, q)
+        h_m0 = h_func(m0, q0)
+
+        # Derivative of h at m0: dh/dm|m0
+        # Formula: h'(m) = (2*m_pi^2)/(pi*q*m^2) * ln((m+2q)/(2*m_pi)) + 1/(pi*m)
+        # We need this at m0
+        dh_dm_m0 = (2.0 * m_pi**2) / (np.pi * q0 * m0**2) * np.log((m0 + 2 * q0) / (2 * m_pi)) + 1.0 / (np.pi * m0)
+
+        # Parameter f(s) or f(m)
+        # f(m) = Gamma0 * m0^2 / q0^3 * [q^2 * (h(m) - h(m0)) + (m0^2 - m^2) * q0^2 * dh_dm_m0]
+        # Note: (m0^2 - m^2) = (m0^2 - s)
+
+        # We'll compute the term inside brackets first
+        term1 = q**2 * (h_m - h_m0)
+        term2 = (m0_sq - s_val) * q0**2 * dh_dm_m0
+
+        f_val = (gamma0 * m0_sq / q0**3) * (term1 + term2)
+
+        # Energy dependent width Gamma(s)
+        # Gamma(s) = Gamma0 * (q/q0)^3 * (m0/m)
+        gamma_s = gamma0 * (q / q0) ** 3 * (m0 / m)
+
+        # Normalization constant D (numerator term)
+        # The numerator is 1 + D * Gamma0/m0
+        # where D = dh/dm|m0 * something?
+        # Re-checking search result: "D is a parameter related to the derivative of f(m) at m0... The parameter D is given by D = dh/dm|m0"
+        # Wait, if D = dh/dm|m0, then the term is 1 + dh/dm|m0 * Gamma0/m0
+
+        d_param = dh_dm_m0
+        numerator = 1.0 + d_param * (gamma0 / m0)
+
+        # Denominator
+        # D(s) = m0^2 - s + f(s) - i * m0 * Gamma(s)
+        denominator = m0_sq - s_val + f_val - 1j * m0 * gamma_s
+
+        return numerator / denominator
+
+    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+        s_val = s if s is not None else (self.s.value if self.s is not None else None)
+        if s_val is None:
+            raise ValueError("s must be provided either at construction or call time")
+        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
+
+
 class Flatte(Lineshape):
     """
     Flatté lineshape for coupled-channel resonances.
