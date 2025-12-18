@@ -10,7 +10,7 @@ from typing import Any, Union
 from decayshape import config
 
 
-def blatt_weiskopf_form_factor(q: Union[float, Any], q0: Union[float, Any], r: float, L: int) -> Union[float, Any]:
+def blatt_weiskopf_form_factor(q: Union[float, Any], r: float, L: int) -> Union[float, Any]:
     """
     Calculate the Blatt-Weiskopf form factor.
 
@@ -19,7 +19,6 @@ def blatt_weiskopf_form_factor(q: Union[float, Any], q0: Union[float, Any], r: f
 
     Args:
         q: Momentum in the decay frame
-        q0: Reference momentum (typically at resonance mass)
         r: Hadron radius parameter (in GeV^-1)
         L: Angular momentum of the decay
 
@@ -28,22 +27,17 @@ def blatt_weiskopf_form_factor(q: Union[float, Any], q0: Union[float, Any], r: f
     """
     np = config.backend  # Get backend dynamically
 
+    x = q * r
     if L == 0:
         return np.ones_like(q)
     elif L == 1:
-        return np.sqrt((1 + (r * q0) ** 2) / (1 + (r * q) ** 2))
+        return np.sqrt(1 + x**2)
     elif L == 2:
-        return np.sqrt((9 + 3 * (r * q0) ** 2 + (r * q0) ** 4) / (9 + 3 * (r * q) ** 2 + (r * q) ** 4))
+        return np.sqrt(9 + 3 * x**2 + x**4)
     elif L == 3:
-        return np.sqrt(
-            (225 + 45 * (r * q0) ** 2 + 6 * (r * q0) ** 4 + (r * q0) ** 6)
-            / (225 + 45 * (r * q) ** 2 + 6 * (r * q) ** 4 + (r * q) ** 6)
-        )
+        return np.sqrt(225 + 45 * x**2 + 6 * x**4 + x**6)
     elif L == 4:
-        return np.sqrt(
-            (11025 + 1575 * (r * q0) ** 2 + 135 * (r * q0) ** 4 + 10 * (r * q0) ** 6 + (r * q0) ** 8)
-            / (11025 + 1575 * (r * q) ** 2 + 135 * (r * q) ** 4 + 10 * (r * q) ** 6 + (r * q) ** 8)
-        )
+        return np.sqrt(11025 + 1575 * x**2 + 135 * x**4 + 10 * x**6 + x**8)
     else:
         raise ValueError(f"Blatt-Weiskopf form factor not implemented for L={L}")
 
@@ -69,6 +63,21 @@ def angular_momentum_barrier_factor(q: Union[float, Any], q0: Union[float, Any],
         return np.ones_like(q)
     else:
         return (q / q0) ** L
+
+
+def mass_dependent_width(
+    q_s: Union[float, Any], s: Union[float, Any], q0: Union[float, Any], m0: float, gamma0: float, L: int, r: float
+) -> Union[float, Any]:
+    """
+    Calculate the mass-dependent width.
+    """
+    return (
+        gamma0
+        * (q_s / q0) ** (2 * L)
+        * (m0 / s**0.5)
+        * blatt_weiskopf_form_factor(q_s, r, L) ** 2
+        / blatt_weiskopf_form_factor(q0, r, L) ** 2
+    )
 
 
 def relativistic_breit_wigner_denominator(s: Union[float, Any], mass: float, width: float) -> Union[float, Any]:

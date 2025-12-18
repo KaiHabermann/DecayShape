@@ -15,7 +15,12 @@ from decayshape import config
 
 from .base import FixedParam, Lineshape
 from .particles import Channel
-from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor, relativistic_breit_wigner_denominator
+from .utils import (
+    angular_momentum_barrier_factor,
+    blatt_weiskopf_form_factor,
+    mass_dependent_width,
+    relativistic_breit_wigner_denominator,
+)
 
 
 class RelativisticBreitWigner(Lineshape):
@@ -70,13 +75,15 @@ class RelativisticBreitWigner(Lineshape):
         L = angular_momentum // 2
 
         # Blatt-Weiskopf form factor
-        F = blatt_weiskopf_form_factor(q, params["q0"], params["r"], L)
+        F = blatt_weiskopf_form_factor(q, params["r"], L)
 
         # Angular momentum barrier factor
         B = angular_momentum_barrier_factor(q, params["q0"], L)
 
+        gamma_s = mass_dependent_width(q, s, params["q0"], params["pole_mass"], params["width"], L, params["r"])
+
         # Breit-Wigner denominator (use optimization parameter pole_mass)
-        denominator = relativistic_breit_wigner_denominator(s, params["pole_mass"], params["width"])
+        denominator = relativistic_breit_wigner_denominator(s, params["pole_mass"], gamma_s)
 
         return F * B / denominator
 
@@ -135,11 +142,12 @@ class GounarisSakurai(Lineshape):
     delta_mag: float = Field(default=0.0002, description="Magnitude of interfering particle")
     delta_phi: float = Field(default=1.65, description="Phase of interfering particle in radians")
     q0: Optional[float] = Field(default=None, description="Reference momentum (calculated from channel if None)")
+    r: float = Field(default=1.0, description="Hadron radius parameter for Blatt-Weiskopf form factor")
 
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
-        params = ["pole_mass", "width", "omega_mass", "omega_width", "delta_mag", "delta_phi"]
+        params = ["pole_mass", "width", "omega_mass", "omega_width", "delta_mag", "delta_phi", "r"]
         if self.q0 is not None:
             params.append("q0")
         return params
@@ -161,6 +169,7 @@ class GounarisSakurai(Lineshape):
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
+        L = angular_momentum // 2
         m0 = params["pole_mass"]
         gamma0 = params["width"]
         s_val = s
@@ -198,10 +207,6 @@ class GounarisSakurai(Lineshape):
         # We need this at m0
         dh_dm_m0 = (2.0 * m_pi**2) / (np.pi * q0 * m0**2) * np.log((m0 + 2 * q0) / (2 * m_pi)) + 1.0 / (np.pi * m0)
 
-        # Parameter f(s) or f(m)
-        # f(m) = Gamma0 * m0^2 / q0^3 * [q^2 * (h(m) - h(m0)) + (m0^2 - m^2) * q0^2 * dh_dm_m0]
-        # Note: (m0^2 - m^2) = (m0^2 - s)
-
         # We'll compute the term inside brackets first
         term1 = q**2 * (h_m - h_m0)
         term2 = (m0_sq - s_val) * q0**2 * dh_dm_m0
@@ -210,13 +215,8 @@ class GounarisSakurai(Lineshape):
 
         # Energy dependent width Gamma(s)
         # Gamma(s) = Gamma0 * (q/q0)^3 * (m0/m)
-        gamma_s = gamma0 * (q / q0) ** 3 * (m0 / m)
-
-        # Normalization constant D (numerator term)
-        # The numerator is 1 + D * Gamma0/m0
-        # where D = dh/dm|m0 * something?
-        # Re-checking search result: "D is a parameter related to the derivative of f(m) at m0... The parameter D is given by D = dh/dm|m0"
-        # Wait, if D = dh/dm|m0, then the term is 1 + dh/dm|m0 * Gamma0/m0
+        gamma_s = mass_dependent_width(q, s_val, q0, m0, gamma0, L, params["r"])
+        omega_gamma_s = mass_dependent_width(q, s_val, q0, params["omega_mass"], params["omega_width"], L, params["r"])
 
         d_param = dh_dm_m0
         numerator = 1.0 + d_param * (gamma0 / m0)
@@ -226,7 +226,7 @@ class GounarisSakurai(Lineshape):
         denominator = m0_sq - s_val + f_val - 1j * m0 * gamma_s
 
         delta = params["delta_mag"] * np.exp(1j * params["delta_phi"])
-        omega_term = (1 + delta * s / (params["omega_mass"] ** 2 - s - 1j * params["omega_mass"] * params["omega_width"])) / (
+        omega_term = (1 + delta * s / (params["omega_mass"] ** 2 - s - 1j * params["omega_mass"] * omega_gamma_s)) / (
             1 + delta
         )
 
@@ -307,22 +307,30 @@ class Flatte(Lineshape):
         channel2.particle2.value.mass
         q2 = channel2.momentum(s)
 
+        q2 = np.sqrt(s / 4 + 0j - channel2.particle1.value.mass**2)
+
         # Convert doubled angular momentum to actual L value
         L = angular_momentum // 2
 
         # Form factors and barrier factors for both channels
-        F1 = blatt_weiskopf_form_factor(q1, params["q01"], params["r1"], L)
-        F2 = blatt_weiskopf_form_factor(q2, params["q02"], params["r2"], L)
-        B1 = angular_momentum_barrier_factor(q1, params["q01"], L)
-        B2 = angular_momentum_barrier_factor(q2, params["q02"], L)
+        blatt_weiskopf_form_factor(q1, params["r1"], L)
+        blatt_weiskopf_form_factor(q2, params["r2"], L)
+        angular_momentum_barrier_factor(q1, params["q01"], L)
+        angular_momentum_barrier_factor(q2, params["q02"], L)
+
+        gamma1 = params["width1"] * q1
+        params["width2"] * q2
 
         # Total width
-        total_width = params["width1"] * F1 * B1 + params["width2"] * F2 * B2
-
+        total_width = mass_dependent_width(
+            q1, s, params["q01"], params["pole_mass"], params["width1"], angular_momentum // 2, params["r1"]
+        ) + mass_dependent_width(
+            q2, s, params["q02"], params["pole_mass"], params["width2"], angular_momentum // 2, params["r2"]
+        )  # TODO: here the angular momentum of the other channel should be used
         # Flatté denominator (use optimization parameter pole_mass)
-        denominator = s - params["pole_mass"] ** 2 + 1j * params["pole_mass"] * total_width
+        denominator = params["pole_mass"] ** 2 - s - 1j * params["pole_mass"] * total_width
 
-        numerator = params["pole_mass"] * np.sqrt(params["width1"] * F1 * B1 * params["width2"] * F2 * B2)
+        numerator = params["pole_mass"] * gamma1
         return numerator / denominator
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:

@@ -14,10 +14,9 @@ class TestBlattWeiskopfFormFactor:
     def test_s_wave_form_factor(self):
         """Test S-wave (L=0) form factor."""
         q = np.array([0.1, 0.2, 0.3])
-        q0 = 0.2
         r = 1.0
 
-        F = blatt_weiskopf_form_factor(q, q0, r, L=0)
+        F = blatt_weiskopf_form_factor(q, r, L=0)
 
         # S-wave should be 1 everywhere
         expected = np.ones_like(q)
@@ -26,22 +25,20 @@ class TestBlattWeiskopfFormFactor:
     def test_p_wave_form_factor(self):
         """Test P-wave (L=1) form factor."""
         q = np.array([0.1, 0.2, 0.3])
-        q0 = 0.2
         r = 1.0
 
-        F = blatt_weiskopf_form_factor(q, q0, r, L=1)
+        F = blatt_weiskopf_form_factor(q, r, L=1)
 
-        # P-wave formula: sqrt((1 + (r*q0)^2) / (1 + (r*q)^2))
-        expected = np.sqrt((1 + (r * q0) ** 2) / (1 + (r * q) ** 2))
+        # P-wave formula: sqrt((1 + x^2) / (1 + x^2))
+        expected = np.sqrt(1 + (q * r) ** 2)
         np.testing.assert_array_almost_equal(F, expected)
 
     def test_d_wave_form_factor(self):
         """Test D-wave (L=2) form factor."""
         q = np.array([0.1, 0.2, 0.3])
-        q0 = 0.2
         r = 1.0
 
-        F = blatt_weiskopf_form_factor(q, q0, r, L=2)
+        F = blatt_weiskopf_form_factor(q, r, L=2)
 
         # Should be finite and positive
         assert np.all(F > 0)
@@ -50,30 +47,27 @@ class TestBlattWeiskopfFormFactor:
     def test_higher_l_values(self):
         """Test higher L values."""
         q = np.array([0.1, 0.2, 0.3])
-        q0 = 0.2
         r = 1.0
 
         for L in [3, 4]:
-            F = blatt_weiskopf_form_factor(q, q0, r, L=L)
+            F = blatt_weiskopf_form_factor(q, r, L=L)
             assert np.all(F > 0)
             assert np.all(np.isfinite(F))
 
     def test_invalid_l_value(self):
         """Test error for invalid L value."""
         q = 0.2
-        q0 = 0.2
         r = 1.0
 
         with pytest.raises(ValueError, match="not implemented for L="):
-            blatt_weiskopf_form_factor(q, q0, r, L=10)
+            blatt_weiskopf_form_factor(q, r, L=10)
 
     def test_scalar_input(self):
         """Test with scalar input."""
         q = 0.2
-        q0 = 0.2
         r = 1.0
 
-        F = blatt_weiskopf_form_factor(q, q0, r, L=1)
+        F = blatt_weiskopf_form_factor(q, r, L=1)
 
         assert isinstance(F, (float, np.floating))
         assert F > 0
@@ -82,26 +76,16 @@ class TestBlattWeiskopfFormFactor:
     def test_zero_momentum(self):
         """Test behavior at zero momentum."""
         q = 0.0
-        q0 = 0.2
         r = 1.0
 
         # S-wave should be 1
-        F0 = blatt_weiskopf_form_factor(q, q0, r, L=0)
+        F0 = blatt_weiskopf_form_factor(q, r, L=0)
         assert F0 == 1.0
 
         # P-wave should be finite
-        F1 = blatt_weiskopf_form_factor(q, q0, r, L=1)
+        F1 = blatt_weiskopf_form_factor(q, r, L=1)
         assert np.isfinite(F1)
         assert F1 > 0
-
-    def test_form_factor_normalization(self):
-        """Test form factor normalization at q = q0."""
-        q0 = 0.2
-        r = 1.0
-
-        for L in [0, 1, 2, 3, 4]:
-            F = blatt_weiskopf_form_factor(q0, q0, r, L=L)
-            assert F == pytest.approx(1.0, rel=1e-10)
 
 
 class TestAngularMomentumBarrierFactor:
@@ -243,7 +227,7 @@ class TestUtilityFunctionIntegration:
         r = 1.0
 
         for L in [0, 1, 2]:
-            F = blatt_weiskopf_form_factor(q, q0, r, L=L)
+            F = blatt_weiskopf_form_factor(q, r, L=L)
             B = angular_momentum_barrier_factor(q, q0, L=L)
 
             # Both should be positive
@@ -251,10 +235,8 @@ class TestUtilityFunctionIntegration:
             assert np.all(B >= 0)
 
             # Both should be 1 at q = q0
-            F_ref = blatt_weiskopf_form_factor(q0, q0, r, L=L)
             B_ref = angular_momentum_barrier_factor(q0, q0, L=L)
 
-            assert F_ref == pytest.approx(1.0, rel=1e-10)
             assert B_ref == pytest.approx(1.0, rel=1e-10)
 
     def test_breit_wigner_denominator_properties(self):
@@ -284,7 +266,7 @@ class TestUtilityFunctionIntegration:
         r = 1.0
 
         for L in [0, 1, 2]:
-            F = blatt_weiskopf_form_factor(q, q0, r, L=L)
+            F = blatt_weiskopf_form_factor(q, r, L=L)
             B = angular_momentum_barrier_factor(q, q0, L=L)
 
             # Product should be well-behaved
@@ -304,7 +286,7 @@ class TestUtilityFunctionIntegration:
 
         # All functions should work with these units
         bw_denom = relativistic_breit_wigner_denominator(s, mass, width)
-        F = blatt_weiskopf_form_factor(q, q0, r, L=1)
+        F = blatt_weiskopf_form_factor(q, r, L=1)
         B = angular_momentum_barrier_factor(q, q0, L=1)
 
         # All should be finite

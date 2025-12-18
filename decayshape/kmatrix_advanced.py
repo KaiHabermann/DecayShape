@@ -289,7 +289,7 @@ class KMatrixAdvanced(Lineshape):
                 config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
             )
 
-        B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["q0"], params["r"], L)
+        B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["r"], L)
 
         if n_channels == 1:
             # Single channel: F_vector is already 1D

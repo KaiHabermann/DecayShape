@@ -101,7 +101,7 @@ def example_utility_functions():
     r = 1.0
 
     for L in [0, 1, 2]:
-        F = ds.blatt_weiskopf_form_factor(q, q0, r, L)
+        F = ds.blatt_weiskopf_form_factor(q, r, L)
         B = ds.angular_momentum_barrier_factor(q, q0, L)
         print(f"L={L}: F={F}, B={B}")
 
