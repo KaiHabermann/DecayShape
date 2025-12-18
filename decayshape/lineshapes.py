@@ -139,7 +139,7 @@ class GounarisSakurai(Lineshape):
     @property
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
-        params = ["pole_mass", "width"]
+        params = ["pole_mass", "width", "omega_mass", "omega_width", "delta_mag", "delta_phi"]
         if self.q0 is not None:
             params.append("q0")
         return params
