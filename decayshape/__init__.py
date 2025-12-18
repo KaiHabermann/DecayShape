@@ -13,6 +13,7 @@ from .lineshapes import (
     CubicInterpolation,
     Flatte,
     Gaussian,
+    GounarisSakurai,
     InterpolationBase,
     LinearInterpolation,
     QuadraticInterpolation,
@@ -33,6 +34,7 @@ __version__ = "0.1.7"
 # Dictionary of all available lineshapes
 available_lineshapes = {
     "RelativisticBreitWigner": RelativisticBreitWigner,
+    "GounarisSakurai": GounarisSakurai,
     "Flatte": Flatte,
     "Gaussian": Gaussian,
     "LinearInterpolation": LinearInterpolation,
@@ -46,6 +48,7 @@ __all__ = [
     "FixedParam",
     "JsonSchemaMixin",
     "RelativisticBreitWigner",
+    "GounarisSakurai",
     "Flatte",
     "Gaussian",
     "InterpolationBase",
