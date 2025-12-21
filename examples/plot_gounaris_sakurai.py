@@ -3,35 +3,41 @@ import numpy as np
 
 from decayshape.base import FixedParam
 from decayshape.lineshapes import GounarisSakurai, RelativisticBreitWigner
-from decayshape.particles import Channel, CommonParticles
+from decayshape.particles import Channel, Particle
 
 # Define mass range (0.3 to 1.2 GeV covering rho(770))
-mass = np.linspace(0.3, 1.2, 500)
+scale = 1000
+mass = np.linspace(0.3 * scale, 1.2 * scale, 500)
 s = mass**2
 
 # Define channel (pi+ pi-)
-pipi = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+# pipi = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+pipi = Channel(
+    particle1=Particle(mass=0.13957018 * scale, spin=0, parity=-1),
+    particle2=Particle(mass=0.13957018 * scale, spin=0, parity=-1),
+)
 
 # Instantiate Gounaris-Sakurai lineshape
 # Note: GS is specifically designed for P-wave (L=1) resonances like rho
 gs = GounarisSakurai(
     s=s,
     channel=FixedParam(value=pipi),
-    pole_mass=0.775,
-    width=0.150,
-    omega_mass=0.78265,
-    omega_width=0.00849,
+    pole_mass=0.775 * scale,
+    width=0.150 * scale,
+    omega_mass=0.78265 * scale,
+    omega_width=0.00849 * scale,
     delta_mag=0.002,
     delta_phi=1.65,
+    r=1.0 / scale,
 )
 
 # Instantiate Relativistic Breit-Wigner for comparison
 rbw = RelativisticBreitWigner(
     s=s,
     channel=FixedParam(value=pipi),
-    pole_mass=0.775,
-    width=0.150,
-    r=1.0,  # Standard interaction radius ~1 fm ~ 5 GeV^-1, but using default 1.0 from code
+    pole_mass=0.775 * scale,
+    width=0.150 * scale,
+    r=1.0 / scale,  # Standard interaction radius ~1 fm ~ 5 GeV^-1, but using default 1.0 from code
 )
 
 # Evaluate amplitudes

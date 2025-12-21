@@ -172,6 +172,10 @@ class GounarisSakurai(Lineshape):
         L = angular_momentum // 2
         m0 = params["pole_mass"]
         gamma0 = params["width"]
+        omega_mass = params["omega_mass"]
+        omega_width = params["omega_width"]
+        delta_mag = params["delta_mag"]
+        delta_phi = params["delta_phi"]
         s_val = s
 
         # Calculate derived quantities
@@ -191,46 +195,32 @@ class GounarisSakurai(Lineshape):
         # Using particle1 mass as pion mass
         m_pi = self.channel.value.particle1.value.mass
 
-        # Calculate m = sqrt(s)
+        # correction terms to the mass
         m = np.sqrt(s_val)
+        logTerm = np.log((m + q) / (2 * m_pi))
+        logTerm0 = np.log((m0 + q0) / (2 * m_pi))
 
-        # Function h(m)
-        def h_func(m_val, q_val):
-            # h(m) = (2/pi) * (q/m) * ln((m + 2q)/(2*m_pi))
-            return (2.0 / np.pi) * (q_val / m_val) * np.log((m_val + 2 * q_val) / (2 * m_pi))
+        t1 = 2 * m0_sq * q**3 * logTerm / (m * self.channel.value.momentum(m0_sq) ** 3)
+        t2 = logTerm0 * (q**2 * (s - 3 * m0_sq) + s * (m0_sq - s)) / (m * q0**2)
+        t3 = (m0_sq - s) / q0
 
-        h_m = h_func(m, q)
-        h_m0 = h_func(m0, q0)
-
-        # Derivative of h at m0: dh/dm|m0
-        # Formula: h'(m) = (2*m_pi^2)/(pi*q*m^2) * ln((m+2q)/(2*m_pi)) + 1/(pi*m)
-        # We need this at m0
-        dh_dm_m0 = (2.0 * m_pi**2) / (np.pi * q0 * m0**2) * np.log((m0 + 2 * q0) / (2 * m_pi)) + 1.0 / (np.pi * m0)
-
-        # We'll compute the term inside brackets first
-        term1 = q**2 * (h_m - h_m0)
-        term2 = (m0_sq - s_val) * q0**2 * dh_dm_m0
-
-        f_val = (gamma0 * m0_sq / q0**3) * (term1 + term2)
-
-        # Energy dependent width Gamma(s)
-        # Gamma(s) = Gamma0 * (q/q0)^3 * (m0/m)
+        m2_corr = m0_sq + gamma0 * (t1 + t2 + t3)
         gamma_s = mass_dependent_width(q, s_val, q0, m0, gamma0, L, params["r"])
-        omega_gamma_s = mass_dependent_width(q, s_val, q0, params["omega_mass"], params["omega_width"], L, params["r"])
 
-        d_param = dh_dm_m0
-        numerator = 1.0 + d_param * (gamma0 / m0)
+        denominator = m2_corr - 1j * m * gamma_s - s
 
-        # Denominator
-        # D(s) = m0^2 - s + f(s) - i * m0 * Gamma(s)
-        denominator = m0_sq - s_val + f_val - 1j * m0 * gamma_s
+        F = blatt_weiskopf_form_factor(q, params["r"], L)
+        B = angular_momentum_barrier_factor(q, params["q0"], L)
 
-        delta = params["delta_mag"] * np.exp(1j * params["delta_phi"])
-        omega_term = (1 + delta * s / (params["omega_mass"] ** 2 - s - 1j * params["omega_mass"] * omega_gamma_s)) / (
-            1 + delta
-        )
+        # Rho-Omega Interference
+        delta = delta_mag * np.exp(1j * delta_phi)
+        # Omega width also follows L=1 barrier scaling
+        q_om = self.channel.value.momentum(omega_mass**2)
+        gamma_om_s = mass_dependent_width(q, s_val, q_om, omega_mass, omega_width, L, params["r"])
 
-        return numerator / denominator * omega_term
+        omega_term = (1 + delta * s / (omega_mass**2 - s - 1j * m * gamma_om_s)) / (1 + delta)
+
+        return (F * B / denominator) * omega_term
 
     def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
