@@ -6,7 +6,7 @@ from decayshape.lineshapes import GounarisSakurai, RelativisticBreitWigner
 from decayshape.particles import Channel, Particle
 
 # Define mass range (0.3 to 1.2 GeV covering rho(770))
-scale = 1000
+scale = 1
 mass = np.linspace(0.3 * scale, 1.2 * scale, 500)
 s = mass**2
 
@@ -27,7 +27,7 @@ gs = GounarisSakurai(
     omega_mass=0.78265 * scale,
     omega_width=0.00849 * scale,
     delta_mag=0.002,
-    delta_phi=1.65,
+    delta_phi=2.5,
     r=1.0 / scale,
 )
 
@@ -52,7 +52,17 @@ amp_rbw = rbw(angular_momentum=2, spin=2)
 plt.figure(figsize=(10, 6))
 
 # Plot absolute squared amplitudes (intensity)
-plt.plot(mass, np.abs(amp_gs) ** 2, label="Gounaris-Sakurai", linewidth=2)
+# plt.plot(mass, np.abs(amp_gs) ** 2, label="Gounaris-Sakurai", linewidth=2)
+for delta_phi in [0, 0.5, 1, 1.5, 2, 2.5, 3]:
+    plt.plot(
+        mass,
+        np.abs(gs(angular_momentum=2, spin=2, delta_phi=delta_phi)) ** 2,
+        label=f"Gounaris-Sakurai (delta_phi={delta_phi})",
+        linewidth=1,
+        alpha=0.5,
+    )
+
+
 plt.plot(mass, np.abs(amp_rbw) ** 2, label="Relativistic Breit-Wigner", linestyle="--", linewidth=2)
 
 plt.xlabel("Mass [GeV/$c^2$]")

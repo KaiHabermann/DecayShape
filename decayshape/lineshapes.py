@@ -197,16 +197,18 @@ class GounarisSakurai(Lineshape):
 
         # correction terms to the mass
         m = np.sqrt(s_val)
-        logTerm = np.log((m + q) / (2 * m_pi))
-        logTerm0 = np.log((m0 + q0) / (2 * m_pi))
 
-        t1 = 2 * m0_sq * q**3 * logTerm / (m * self.channel.value.momentum(m0_sq) ** 3)
-        t2 = logTerm0 * (q**2 * (s - 3 * m0_sq) + s * (m0_sq - s)) / (m * q0**2)
-        t3 = (m0_sq - s) / q0
-
-        m2_corr = m0_sq + gamma0 * (t1 + t2 + t3)
         gamma_s = mass_dependent_width(q, s_val, q0, m0, gamma0, L, params["r"])
 
+        def h(m):
+            return 2 / np.pi * self.channel.value.momentum(m**2) / m * np.log((m + q) / (2 * m_pi))
+
+        def hd_dm(m):
+            return h(m) * (1 / 8 / self.channel.value.momentum(m**2) ** 2 - (1 / 2 / m**2)) + 1 / 2 / np.pi / m**2
+
+        f_val = (gamma0 * m0_sq / q0**3) * (q**2 * (h(m) - h(m0)) + (m0_sq - s) * q0**2 * hd_dm(m0))
+
+        m2_corr = m0_sq + f_val
         denominator = m2_corr - 1j * m * gamma_s - s
 
         F = blatt_weiskopf_form_factor(q, params["r"], L)
