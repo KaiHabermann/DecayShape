@@ -287,14 +287,10 @@ class Flatte(Lineshape):
         # Calculate momenta in both channels using Channel objects
         # Channel 1 momentum
         channel1 = self.channel1.value
-        channel1.particle1.value.mass
-        channel1.particle2.value.mass
         q1 = channel1.momentum(s)
 
         # Channel 2 momentum
         channel2 = self.channel2.value
-        channel2.particle1.value.mass
-        channel2.particle2.value.mass
         q2 = channel2.momentum(s)
 
         # Convert doubled angular momentum to actual L value

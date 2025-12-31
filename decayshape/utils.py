@@ -46,6 +46,8 @@ def angular_momentum_barrier_factor(q: Union[float, Any], q0: Union[float, Any],
     """
     Calculate the angular momentum barrier factor.
 
+    (q/q0)^L
+
     The barrier factor accounts for the angular momentum dependence
     of the decay amplitude.
 
@@ -79,7 +81,7 @@ def mass_dependent_width(
     Calculate the mass-dependent width.
     """
     rho = phase_space_factor(q_s, s)
-    rho0 = phase_space_factor(q0, s)
+    rho0 = phase_space_factor(q0, m0**2)
     return (
         gamma0
         * rho
