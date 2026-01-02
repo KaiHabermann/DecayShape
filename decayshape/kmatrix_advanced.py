@@ -274,20 +274,20 @@ class KMatrixAdvanced(Lineshape):
         # Step 2: Build the P-vector
         P_vector = self._build_p_vector(params, s, n_poles, n_channels)
 
+        output_idx = self.output_channel.value
+        # The norm value for s
+        s_0 = config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
+        if params["q0"] is None:
+            params["q0"] = self.channels.value[output_idx].momentum(s_0)
+
         # Step 3: Build the F-vector
-        A = self._build_amplitude(K_matrix, P_vector, s, n_channels)
+        A = self._build_amplitude(K_matrix, P_vector, s, n_channels, s_0, params["r"])
 
         # Step 4: Return the specified channel of the F-vector
-        output_idx = self.output_channel.value
 
         # Compute angular momentum barrier factor
         q = self.channels.value[output_idx].momentum(s)
         L = angular_momentum // 2
-
-        if params["q0"] is None:
-            params["q0"] = self.channels.value[output_idx].momentum(
-                config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
-            )
 
         B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["r"], L)
 
@@ -387,7 +387,7 @@ class KMatrixAdvanced(Lineshape):
 
         return P_vector
 
-    def _build_amplitude(self, K, P, s, n_channels):
+    def _build_amplitude(self, K, P, s, n_channels, s_0, r):
         """
         The P-Vector amplitude is given by
 
@@ -398,13 +398,16 @@ class KMatrixAdvanced(Lineshape):
 
         # Calculate phase space factors for each channel (vectorized)
         rho_list = []
+        n_list = []
         for channel in self.channels.value:
             val = channel.phase_space_factor(s)
             rho_list.append(val)
+            n_list.append(channel.n(s, s_0, r) ** 2)
         rho = np.stack(rho_list, axis=0)
+        n = np.stack(n_list, axis=0)
 
         # shape: (s_len, n_channels, n_channels)
-        rho_diag_matrix = np.eye(n_channels)[None, :, :] * rho.T[:, :, None]
+        rho_diag_matrix = np.eye(n_channels)[None, :, :] * rho.T[:, :, None] * n.T[:, :, None]
 
         # A_a = K_ac P^c
         if n_channels == 1:

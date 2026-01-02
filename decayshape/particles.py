@@ -4,12 +4,13 @@ Particle classes for hadron physics.
 Provides classes for particles with mass, spin, and parity quantum numbers.
 """
 
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
 from .base import FixedParam, JsonSchemaMixin, Numerical
 from .config import config
+from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 
 class Particle(BaseModel, JsonSchemaMixin):
@@ -47,6 +48,10 @@ class Channel(BaseModel, JsonSchemaMixin):
 
     particle1: FixedParam[Particle] = Field(..., description="First particle in the channel")
     particle2: FixedParam[Particle] = Field(..., description="Second particle in the channel")
+    l: Optional[FixedParam[int]] = Field(
+        default_factory=lambda: FixedParam[int](value=0),
+        description="Angular momentum of the channel. Optional. Used mainly in cases of multichannel ampltudes. For single channel amplitudes (Breit-Wigner), L is passed as an argument to the function call.",
+    )
 
     class Config:
         arbitrary_types_allowed = True
@@ -136,6 +141,25 @@ class Channel(BaseModel, JsonSchemaMixin):
 
         q = self.momentum(s)
         return config.backend.where(s < threshold_squared, 0.0, 2 * q / s**0.5)
+
+    def n(self, s: Union[float, Any], s_0: Union[float, Any], r: float, L: Optional[int] = None) -> Union[float, Any]:
+        """
+        Calculate the n factor for the channel.
+
+        Args:
+            s: Mandelstam variable s (mass squared)
+            s_0: Norm value for s
+            r: Blatt-Weiskopf form factor radius
+            L: Angular momentum. Optional. If not provided, it is set to the value of the l field. L is not doubled in this function and assumed to be integer.
+
+        Returns:
+            n factor
+        """
+        q = self.momentum(s)
+        q0 = self.momentum(s_0)
+        if L is None:
+            L = self.l.value // 2
+        return angular_momentum_barrier_factor(q, q0, L) * blatt_weiskopf_form_factor(q, r, L)
 
     def __repr__(self) -> str:
         """String representation of the channel."""
