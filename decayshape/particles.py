@@ -48,9 +48,9 @@ class Channel(BaseModel, JsonSchemaMixin):
 
     particle1: FixedParam[Particle] = Field(..., description="First particle in the channel")
     particle2: FixedParam[Particle] = Field(..., description="Second particle in the channel")
-    l: Optional[FixedParam[int]] = Field(
+    l: FixedParam[int] = Field(
         default_factory=lambda: FixedParam[int](value=0),
-        description="Angular momentum of the channel. Optional. Used mainly in cases of multichannel ampltudes. For single channel amplitudes (Breit-Wigner), L is passed as an argument to the function call.",
+        description="Angular momentum of the channel (value doubled). Optional. Used mainly in cases of multichannel ampltudes. For single channel amplitudes (Breit-Wigner), L is passed as an argument to the function call.",
     )
 
     class Config:
