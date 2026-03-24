@@ -14,7 +14,7 @@ from pydantic import Field, model_validator
 from decayshape import config
 
 from .base import FixedParam, Lineshape
-from .particles import Channel
+from .particles import Channel, _make_channel_override
 from .utils import (
     angular_momentum_barrier_factor,
     blatt_weiskopf_form_factor,
@@ -62,14 +62,16 @@ class RelativisticBreitWigner(Lineshape):
         Returns:
             Breit-Wigner amplitude
         """
+        channel = kwargs.pop("_channel_override", self.channel.value)
+
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
         if params["q0"] is None:
-            params["q0"] = self.channel.value.momentum(params["pole_mass"] ** 2)
+            params["q0"] = channel.momentum(params["pole_mass"] ** 2)
 
         # Calculate momentum in the decay frame using channel masses
-        q = self.channel.momentum(s)
+        q = channel.momentum(s)
 
         # Convert doubled angular momentum to actual L value
         L = angular_momentum // 2
@@ -87,11 +89,13 @@ class RelativisticBreitWigner(Lineshape):
 
         return F * B / denominator
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         # Resolve s: prefer call-time s, else field value
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
+        if d1_mass is not None or d2_mass is not None:
+            kwargs["_channel_override"] = _make_channel_override(self.channel.value, d1_mass, d2_mass)
         return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
 
@@ -166,6 +170,8 @@ class GounarisSakurai(Lineshape):
         Returns:
             Gounaris-Sakurai amplitude
         """
+        channel = kwargs.pop("_channel_override", self.channel.value)
+
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
@@ -183,17 +189,17 @@ class GounarisSakurai(Lineshape):
 
         # If q0 is not provided, calculate it at pole mass
         if params["q0"] is None:
-            params["q0"] = self.channel.value.momentum(m0_sq)
+            params["q0"] = channel.momentum(m0_sq)
 
         q0 = params["q0"]
-        q = self.channel.momentum(s_val)
+        q = channel.momentum(s_val)
 
         # Get backend
         np = config.backend
 
         # Determine pion mass (assume channel is pi+pi- or similar symmetric channel)
         # Using particle1 mass as pion mass
-        m_pi = self.channel.value.particle1.value.mass
+        m_pi = channel.particle1.value.mass
 
         # correction terms to the mass
         m = np.sqrt(s_val)
@@ -201,10 +207,10 @@ class GounarisSakurai(Lineshape):
         gamma_s = mass_dependent_width(q, s_val, q0, m0, gamma0, L, params["r"])
 
         def h(m):
-            return 2 / np.pi * self.channel.value.momentum(m**2) / m * np.log((m + q) / (2 * m_pi))
+            return 2 / np.pi * channel.momentum(m**2) / m * np.log((m + q) / (2 * m_pi))
 
         def hd_dm(m):
-            return h(m) * (1 / 8 / self.channel.value.momentum(m**2) ** 2 - (1 / 2 / m**2)) + 1 / 2 / np.pi / m**2
+            return h(m) * (1 / 8 / channel.momentum(m**2) ** 2 - (1 / 2 / m**2)) + 1 / 2 / np.pi / m**2
 
         f_val = (gamma0 * m0_sq / q0**3) * (q**2 * (h(m) - h(m0)) + (m0_sq - s) * q0**2 * hd_dm(m0))
 
@@ -217,17 +223,19 @@ class GounarisSakurai(Lineshape):
         # Rho-Omega Interference
         delta = delta_mag * np.exp(1j * delta_phi)
         # Omega width also follows L=1 barrier scaling
-        q_om = self.channel.value.momentum(omega_mass**2)
+        q_om = channel.momentum(omega_mass**2)
         gamma_om_s = mass_dependent_width(q, s_val, q_om, omega_mass, omega_width, L, params["r"])
 
         omega_term = (1 + delta * s / (omega_mass**2 - s - 1j * m * gamma_om_s)) / (1 + delta)
 
         return (F * B / denominator) * omega_term
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
+        if d1_mass is not None or d2_mass is not None:
+            kwargs["_channel_override"] = _make_channel_override(self.channel.value, d1_mass, d2_mass)
         return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
 
@@ -276,17 +284,18 @@ class Flatte(Lineshape):
         Returns:
             Flatté amplitude
         """
+        channel1 = kwargs.pop("_channel_override", self.channel1.value)
+
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
         if params["q01"] is None:
-            params["q01"] = self.channel1.value.momentum(params["pole_mass"] ** 2)
+            params["q01"] = channel1.momentum(params["pole_mass"] ** 2)
         if params["q02"] is None:
             params["q02"] = self.channel2.value.momentum(params["pole_mass"] ** 2)
 
         # Calculate momenta in both channels using Channel objects
         # Channel 1 momentum
-        channel1 = self.channel1.value
         q1 = channel1.momentum(s)
 
         # Channel 2 momentum
@@ -315,10 +324,12 @@ class Flatte(Lineshape):
         )
         return numerator / denominator
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
+        if d1_mass is not None or d2_mass is not None:
+            kwargs["_channel_override"] = _make_channel_override(self.channel1.value, d1_mass, d2_mass)
         return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
 
@@ -373,7 +384,7 @@ class Gaussian(Lineshape):
 
         return np.sqrt(normalization * np.exp(exponent))
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
@@ -486,7 +497,7 @@ class InterpolationBase(Lineshape):
         """
         raise NotImplementedError("interpolate method must be implemented by specific interpolation classes")
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         """
         Call the interpolation lineshape.
 
@@ -498,6 +509,8 @@ class InterpolationBase(Lineshape):
             spin: Spin parameter (not used for interpolation)
             *args: Positional parameter overrides (amplitudes)
             s: Mandelstam variable s (mass squared) or array of s values
+            d1_mass: Ignored (no channel in interpolation lineshapes)
+            d2_mass: Ignored (no channel in interpolation lineshapes)
             **kwargs: Keyword parameter overrides
 
         Returns:

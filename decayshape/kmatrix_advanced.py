@@ -13,7 +13,7 @@ from pydantic import Field, model_validator
 from decayshape import config
 
 from .base import FixedParam, Lineshape
-from .particles import Channel
+from .particles import Channel, _make_channel_override
 from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 
@@ -262,11 +262,13 @@ class KMatrixAdvanced(Lineshape):
         3. Build F-vector from T-matrix and P-vector
         4. Return first entry of F-vector
         """
+        channels = kwargs.pop("_channel_override", self.channels.value)
+
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
         n_poles = len(params["pole_masses"])
-        n_channels = len(self.channels.value)
+        n_channels = len(channels)
 
         # Step 1: Build the full T-matrix
         K_matrix = self._build_k_matrix(params, s, n_poles, n_channels)
@@ -278,15 +280,15 @@ class KMatrixAdvanced(Lineshape):
         # The norm value for s
         s_0 = config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
         if params["q0"] is None:
-            params["q0"] = self.channels.value[output_idx].momentum(s_0)
+            params["q0"] = channels[output_idx].momentum(s_0)
 
         # Step 3: Build the F-vector
-        A = self._build_amplitude(K_matrix, P_vector, s, n_channels, s_0, params["r"])
+        A = self._build_amplitude(K_matrix, P_vector, s, n_channels, s_0, params["r"], channels=channels)
 
         # Step 4: Return the specified channel of the F-vector
 
         # Compute angular momentum barrier factor
-        q = self.channels.value[output_idx].momentum(s)
+        q = channels[output_idx].momentum(s)
         L = angular_momentum // 2
 
         B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["r"], L)
@@ -298,10 +300,15 @@ class KMatrixAdvanced(Lineshape):
             # Multi-channel: F_vector is 2D, return specified channel
             return A[output_idx, :] * B
 
-    def __call__(self, angular_momentum, spin, *args, s=None, **kwargs) -> Union[float, Any]:
+    def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
         if s_val is None:
             raise ValueError("s must be provided either at construction or call time")
+        if d1_mass is not None or d2_mass is not None:
+            output_idx = self.output_channel.value
+            channels = list(self.channels.value)
+            channels[output_idx] = _make_channel_override(channels[output_idx], d1_mass, d2_mass)
+            kwargs["_channel_override"] = channels
         return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
     def _build_k_matrix(
@@ -387,7 +394,7 @@ class KMatrixAdvanced(Lineshape):
 
         return P_vector
 
-    def _build_amplitude(self, K, P, s, n_channels, s_0, r):
+    def _build_amplitude(self, K, P, s, n_channels, s_0, r, channels=None):
         """
         The P-Vector amplitude is given by
 
@@ -396,10 +403,13 @@ class KMatrixAdvanced(Lineshape):
 
         np = config.backend
 
+        if channels is None:
+            channels = self.channels.value
+
         # Calculate phase space factors for each channel (vectorized)
         rho_list = []
         n_list = []
-        for channel in self.channels.value:
+        for channel in channels:
             val = channel.phase_space_factor(s)
             rho_list.append(val)
             n_list.append(channel.n(s, s_0, r) ** 2)

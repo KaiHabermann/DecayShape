@@ -497,3 +497,97 @@ class TestKMatrixPhysics:
         result_no_backgrounds = kmat_no_backgrounds(1, 2)
 
         assert not np.allclose(result, result_no_backgrounds)
+
+
+class TestKMatrixMassOverride:
+    """Tests for d1_mass / d2_mass call-time override on KMatrixAdvanced."""
+
+    def _single_channel_kmat(self, s):
+        pipi = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        return KMatrixAdvanced(
+            s=s,
+            channels=[pipi],
+            pole_masses=[0.775],
+            production_couplings=[1.0],
+            decay_couplings=[1.0],
+            output_channel=0,
+        )
+
+    def _two_channel_kmat(self, s, output_channel=0):
+        pipi = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+        return KMatrixAdvanced(
+            s=s,
+            channels=[pipi, kk],
+            pole_masses=[0.98],
+            production_couplings=[1.0],
+            decay_couplings=[1.0, 0.5],
+            output_channel=output_channel,
+        )
+
+    def test_scalar_mass_override_changes_result(self, sample_s_values):
+        kmat = self._single_channel_kmat(sample_s_values)
+        default = kmat(2, 2)
+        overridden = kmat(2, 2, d1_mass=0.2, d2_mass=0.2)
+        assert not np.allclose(np.abs(default), np.abs(overridden))
+
+    def test_scalar_mass_override_no_mutation(self, sample_s_values):
+        kmat = self._single_channel_kmat(sample_s_values)
+        original_m1 = kmat.channels.value[0].particle1.value.mass
+        original_m2 = kmat.channels.value[0].particle2.value.mass
+        kmat(2, 2, d1_mass=0.5, d2_mass=0.5)
+        assert kmat.channels.value[0].particle1.value.mass == original_m1
+        assert kmat.channels.value[0].particle2.value.mass == original_m2
+
+    def test_only_output_channel_replaced(self, sample_s_values):
+        """When output_channel=1, channel[0] must remain unchanged."""
+        kmat = self._two_channel_kmat(sample_s_values, output_channel=1)
+        original_ch0_m1 = kmat.channels.value[0].particle1.value.mass
+        kmat(2, 2, d1_mass=0.3, d2_mass=0.3)
+        assert kmat.channels.value[0].particle1.value.mass == original_ch0_m1
+
+    def test_partial_override_d1_only(self, sample_s_values):
+        kmat = self._single_channel_kmat(sample_s_values)
+        default = kmat(2, 2)
+        result = kmat(2, 2, d1_mass=0.3)
+        assert not np.allclose(np.abs(default), np.abs(result))
+        # d2 must be untouched on the stored object
+        assert kmat.channels.value[0].particle2.value.mass == CommonParticles.PI_MINUS.mass
+
+    def test_array_mass_override(self, sample_s_values):
+        """Uniform array overrides produce finite results with the correct shape."""
+        kmat = self._single_channel_kmat(sample_s_values)
+        n = len(sample_s_values)
+        result = kmat(2, 2, d1_mass=np.full(n, 0.2), d2_mass=np.full(n, 0.2))
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))
+
+    def test_array_mass_override_matches_scalar(self, sample_s_values):
+        """Uniform array override must give the same result as the equivalent scalar override."""
+        kmat = self._single_channel_kmat(sample_s_values)
+        scalar_result = kmat(2, 2, d1_mass=0.2, d2_mass=0.2)
+        n = len(sample_s_values)
+        array_result = kmat(2, 2, d1_mass=np.full(n, 0.2), d2_mass=np.full(n, 0.2))
+        np.testing.assert_allclose(np.abs(scalar_result), np.abs(array_result), rtol=1e-10)
+
+    def test_varying_array_mass_override(self, sample_s_values):
+        """Non-uniform array override should differ from the scalar override."""
+        kmat = self._single_channel_kmat(sample_s_values)
+        scalar_result = kmat(2, 2, d1_mass=0.2, d2_mass=0.2)
+        n = len(sample_s_values)
+        array_result = kmat(2, 2, d1_mass=np.linspace(0.14, 0.4, n), d2_mass=0.2)
+        assert not np.allclose(np.abs(scalar_result), np.abs(array_result))
+
+    def test_two_channel_scalar_override(self, sample_s_values):
+        kmat = self._two_channel_kmat(sample_s_values, output_channel=0)
+        default = kmat(2, 2)
+        overridden = kmat(2, 2, d1_mass=0.2, d2_mass=0.2)
+        assert not np.allclose(np.abs(default), np.abs(overridden))
+        assert np.all(np.isfinite(overridden))
+
+    def test_two_channel_array_override(self, sample_s_values):
+        kmat = self._two_channel_kmat(sample_s_values, output_channel=0)
+        n = len(sample_s_values)
+        result = kmat(2, 2, d1_mass=np.linspace(0.14, 0.3, n), d2_mass=np.linspace(0.14, 0.3, n))
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))

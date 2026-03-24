@@ -50,6 +50,51 @@ def test_gounaris_sakurai_parameter_override():
     assert val1 != val2
 
 
+def test_gounaris_sakurai_mass_override_scalar():
+    """Scalar d1_mass/d2_mass should change the result without mutating the lineshape."""
+    s_vals = np.linspace(0.4, 1.2, 100) ** 2
+    pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+    gs = GounarisSakurai(s=s_vals, channel=FixedParam(value=pipi_channel), pole_mass=0.775, width=0.15)
+
+    default = gs(angular_momentum=2, spin=2)
+    overridden = gs(angular_momentum=2, spin=2, d1_mass=0.2, d2_mass=0.2)
+
+    # Result must change
+    assert not np.allclose(np.abs(default), np.abs(overridden))
+
+    # Stored channel must not be mutated
+    assert gs.channel.value.particle1.value.mass == CommonParticles.PI_PLUS.mass
+    assert gs.channel.value.particle2.value.mass == CommonParticles.PI_MINUS.mass
+
+
+def test_gounaris_sakurai_mass_override_array():
+    """Uniform array d1/d2 mass override should match the equivalent scalar override."""
+    s_vals = np.linspace(0.4, 1.2, 50) ** 2
+    pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+    gs = GounarisSakurai(s=s_vals, channel=FixedParam(value=pipi_channel), pole_mass=0.775, width=0.15)
+
+    n = len(s_vals)
+    scalar_result = gs(angular_momentum=2, spin=2, d1_mass=0.2, d2_mass=0.2)
+    array_result = gs(angular_momentum=2, spin=2, d1_mass=np.full(n, 0.2), d2_mass=np.full(n, 0.2))
+
+    np.testing.assert_allclose(np.abs(scalar_result), np.abs(array_result), rtol=1e-10)
+    assert array_result.shape == s_vals.shape
+
+
+def test_gounaris_sakurai_mass_override_varying_array():
+    """Non-uniform array mass overrides should differ from a scalar override."""
+    s_vals = np.linspace(0.4, 1.2, 50) ** 2
+    pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+    gs = GounarisSakurai(s=s_vals, channel=FixedParam(value=pipi_channel), pole_mass=0.775, width=0.15)
+
+    n = len(s_vals)
+    scalar_result = gs(angular_momentum=2, spin=2, d1_mass=0.2, d2_mass=0.2)
+    array_result = gs(angular_momentum=2, spin=2, d1_mass=np.linspace(0.14, 0.4, n), d2_mass=0.2)
+
+    assert not np.allclose(np.abs(scalar_result), np.abs(array_result))
+    assert np.all(np.isfinite(array_result))
+
+
 def test_gounaris_sakurai_json_serialization():
     s_vals = np.linspace(0.5, 1.2, 10)
     pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)

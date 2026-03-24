@@ -211,3 +211,27 @@ class CommonParticles:
     TRITON = Particle(mass=2.80892, spin=0.5, parity=1)
     HE3 = Particle(mass=2.80839, spin=0.5, parity=1)
     ALPHA = Particle(mass=3.72738, spin=0, parity=1)
+
+
+def _make_channel_override(channel: Channel, d1_mass, d2_mass) -> Channel:
+    """Return a new Channel identical to *channel* but with particle masses replaced.
+
+    Only the masses are changed; spin, parity, and angular momentum are copied
+    unchanged.  Passing ``None`` for either mass keeps the original value.
+    The original channel object is never mutated.
+    """
+    p1 = channel.particle1.value
+    p2 = channel.particle2.value
+    return Channel(
+        particle1=Particle(
+            mass=d1_mass if d1_mass is not None else p1.mass,
+            spin=p1.spin,
+            parity=p1.parity,
+        ),
+        particle2=Particle(
+            mass=d2_mass if d2_mass is not None else p2.mass,
+            spin=p2.spin,
+            parity=p2.parity,
+        ),
+        l=channel.l.value,
+    )
