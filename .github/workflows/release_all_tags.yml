@@ -1,0 +1,33 @@
+name: Release All Tags
+
+on:
+  workflow_dispatch:
+
+jobs:
+  get-tags:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.get-tags.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get all tags
+        id: get-tags
+        run: |
+          tags=$(git tag | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "tags=$tags" >> $GITHUB_OUTPUT
+
+  release:
+    needs: get-tags
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: ${{ fromJson(needs.get-tags.outputs.tags) }}
+    uses: ./.github/workflows/release_from_tag.yml
+    with:
+      tag: ${{ matrix.tag }}
+    permissions:
+      contents: write
+      id-token: write

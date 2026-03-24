@@ -6,6 +6,12 @@ on:
       tag:
         description: "Existing tag to release (e.g. v0.2.6)"
         required: true
+  workflow_call:
+    inputs:
+      tag:
+        description: "Existing tag to release"
+        required: true
+        type: string
 
 jobs:
   github-release:
@@ -20,13 +26,13 @@ jobs:
       - name: Checkout tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}
+          ref: ${{ inputs.tag }}
 
       - name: Verify tag exists
         run: |
           git fetch --tags
-          git tag | grep -qx "${{ github.event.inputs.tag }}" || \
-            (echo "Tag '${{ github.event.inputs.tag }}' not found." && exit 1)
+          git tag | grep -qx "${{ inputs.tag }}" || \
+            (echo "Tag '${{ inputs.tag }}' not found." && exit 1)
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,10 +58,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          gh release delete '${{ github.event.inputs.tag }}' --yes --repo '${{ github.repository }}' || true
-          gh release create '${{ github.event.inputs.tag }}' \
+          gh release delete '${{ inputs.tag }}' --yes --repo '${{ github.repository }}' || true
+          gh release create '${{ inputs.tag }}' \
             --repo '${{ github.repository }}' \
-            --title '${{ github.event.inputs.tag }}' \
+            --title '${{ inputs.tag }}' \
             --notes ""
 
       - name: Upload artifacts and signatures to GitHub Release
@@ -63,5 +69,5 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
           gh release upload
-          '${{ github.event.inputs.tag }}' dist/**
+          '${{ inputs.tag }}' dist/**
           --repo '${{ github.repository }}'
