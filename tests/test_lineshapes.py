@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from decayshape import FixedParam, RelativisticBreitWigner
-from decayshape.lineshapes import Flatte
+from decayshape.lineshapes import Flatte, Gaussian, LinearInterpolation
 from decayshape.particles import Channel, CommonParticles
 
 
@@ -305,3 +305,166 @@ class TestLineshapeBase:
         # Too many positional arguments
         with pytest.raises(ValueError, match="Too many positional arguments"):
             bw(1, 2, 0.775, 0.15, 1.0, 0.4, 999)  # 7 args, but only 4 expected (after spin, angular_momentum)
+
+
+class TestMassOverride:
+    """Tests for the d1_mass / d2_mass call-time channel mass override."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _bw(self, s):
+        ch = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        return RelativisticBreitWigner(s=s, channel=ch, pole_mass=0.775, width=0.15, r=1.0)
+
+    def _flatte(self, s):
+        ch1 = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        ch2 = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+        return Flatte(s=s, channel1=ch1, channel2=ch2, pole_mass=0.98, width1=0.2, width2=0.8, r1=1.0, r2=1.0)
+
+    # ------------------------------------------------------------------
+    # RelativisticBreitWigner
+    # ------------------------------------------------------------------
+    def test_rbw_scalar_mass_override_changes_result(self, sample_s_values):
+        bw = self._bw(sample_s_values)
+        default = bw(2, 2)
+        overridden = bw(2, 2, d1_mass=0.2, d2_mass=0.2)
+        assert not np.allclose(np.abs(default), np.abs(overridden))
+
+    def test_rbw_scalar_mass_override_no_mutation(self, sample_s_values):
+        bw = self._bw(sample_s_values)
+        original_m1 = bw.channel.value.particle1.value.mass
+        original_m2 = bw.channel.value.particle2.value.mass
+        bw(2, 2, d1_mass=0.5, d2_mass=0.5)
+        assert bw.channel.value.particle1.value.mass == original_m1
+        assert bw.channel.value.particle2.value.mass == original_m2
+
+    def test_rbw_partial_override_d1_only(self, sample_s_values):
+        bw = self._bw(sample_s_values)
+        default = bw(2, 2)
+        result = bw(2, 2, d1_mass=0.2)
+        assert not np.allclose(np.abs(default), np.abs(result))
+        # d2 still the original pion mass
+        assert bw.channel.value.particle2.value.mass == CommonParticles.PI_MINUS.mass
+
+    def test_rbw_partial_override_d2_only(self, sample_s_values):
+        bw = self._bw(sample_s_values)
+        default = bw(2, 2)
+        result = bw(2, 2, d2_mass=0.2)
+        assert not np.allclose(np.abs(default), np.abs(result))
+
+    def test_rbw_array_mass_override(self, sample_s_values):
+        """d1_mass and d2_mass as arrays (one mass value per s point)."""
+        bw = self._bw(sample_s_values)
+        n = len(sample_s_values)
+        d1_arr = np.full(n, 0.2)
+        d2_arr = np.full(n, 0.2)
+        result = bw(2, 2, d1_mass=d1_arr, d2_mass=d2_arr)
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))
+
+    def test_rbw_array_mass_override_matches_scalar(self, sample_s_values):
+        """Uniform array overrides must match the equivalent scalar override."""
+        bw = self._bw(sample_s_values)
+        scalar_result = bw(2, 2, d1_mass=0.2, d2_mass=0.2)
+        n = len(sample_s_values)
+        array_result = bw(2, 2, d1_mass=np.full(n, 0.2), d2_mass=np.full(n, 0.2))
+        np.testing.assert_allclose(np.abs(scalar_result), np.abs(array_result), rtol=1e-10)
+
+    def test_rbw_varying_array_mass_override(self, sample_s_values):
+        """Non-uniform mass arrays should produce results different from the scalar override."""
+        bw = self._bw(sample_s_values)
+        scalar_result = bw(2, 2, d1_mass=0.2, d2_mass=0.2)
+        n = len(sample_s_values)
+        d1_arr = np.linspace(0.14, 0.5, n)
+        array_result = bw(2, 2, d1_mass=d1_arr, d2_mass=0.2)
+        assert not np.allclose(np.abs(scalar_result), np.abs(array_result))
+
+    # ------------------------------------------------------------------
+    # GounarisSakurai — import inline to keep class self-contained
+    # ------------------------------------------------------------------
+    def test_gs_scalar_mass_override_changes_result(self, sample_s_values):
+        from decayshape.lineshapes import GounarisSakurai
+
+        ch = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        gs = GounarisSakurai(s=sample_s_values**2, channel=ch, pole_mass=0.775, width=0.15, r=1.0)
+        default = gs(2, 2)
+        overridden = gs(2, 2, d1_mass=0.2, d2_mass=0.2)
+        assert not np.allclose(np.abs(default), np.abs(overridden))
+
+    def test_gs_no_mutation(self, sample_s_values):
+        from decayshape.lineshapes import GounarisSakurai
+
+        ch = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        gs = GounarisSakurai(s=sample_s_values**2, channel=ch, pole_mass=0.775, width=0.15, r=1.0)
+        original_m1 = gs.channel.value.particle1.value.mass
+        gs(2, 2, d1_mass=0.5, d2_mass=0.5)
+        assert gs.channel.value.particle1.value.mass == original_m1
+
+    def test_gs_array_mass_override(self, sample_s_values):
+        from decayshape.lineshapes import GounarisSakurai
+
+        s = sample_s_values**2
+        ch = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        gs = GounarisSakurai(s=s, channel=ch, pole_mass=0.775, width=0.15, r=1.0)
+        n = len(s)
+        result = gs(2, 2, d1_mass=np.full(n, 0.2), d2_mass=np.full(n, 0.2))
+        assert result.shape == s.shape
+        assert np.all(np.isfinite(result))
+
+    # ------------------------------------------------------------------
+    # Flatte
+    # ------------------------------------------------------------------
+    def test_flatte_scalar_mass_override_changes_result(self, sample_s_values):
+        fl = self._flatte(sample_s_values)
+        default = fl(0, 0)
+        overridden = fl(0, 0, d1_mass=0.2, d2_mass=0.2)
+        assert not np.allclose(np.abs(default), np.abs(overridden))
+
+    def test_flatte_only_channel1_affected(self, sample_s_values):
+        """d1/d2 mass override must not change channel2."""
+        fl = self._flatte(sample_s_values)
+        original_ch2_m1 = fl.channel2.value.particle1.value.mass
+        original_ch2_m2 = fl.channel2.value.particle2.value.mass
+        fl(0, 0, d1_mass=0.3, d2_mass=0.3)
+        assert fl.channel2.value.particle1.value.mass == original_ch2_m1
+        assert fl.channel2.value.particle2.value.mass == original_ch2_m2
+
+    def test_flatte_no_mutation_channel1(self, sample_s_values):
+        fl = self._flatte(sample_s_values)
+        original_m1 = fl.channel1.value.particle1.value.mass
+        fl(0, 0, d1_mass=0.5, d2_mass=0.5)
+        assert fl.channel1.value.particle1.value.mass == original_m1
+
+    def test_flatte_array_mass_override(self, sample_s_values):
+        fl = self._flatte(sample_s_values)
+        n = len(sample_s_values)
+        result = fl(0, 0, d1_mass=np.full(n, 0.2), d2_mass=np.full(n, 0.2))
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))
+
+    def test_flatte_varying_array_mass_override(self, sample_s_values):
+        fl = self._flatte(sample_s_values)
+        n = len(sample_s_values)
+        scalar_result = fl(0, 0, d1_mass=0.2, d2_mass=0.2)
+        array_result = fl(0, 0, d1_mass=np.linspace(0.14, 0.4, n), d2_mass=0.2)
+        assert not np.allclose(np.abs(scalar_result), np.abs(array_result))
+
+    # ------------------------------------------------------------------
+    # Gaussian — no channel, d1/d2 mass must be silently ignored
+    # ------------------------------------------------------------------
+    def test_gaussian_mass_override_is_ignored(self, sample_s_values):
+        g = Gaussian(s=sample_s_values, mean=0.8, width=0.1)
+        default = g(0, 0)
+        with_masses = g(0, 0, d1_mass=0.5, d2_mass=0.5)
+        np.testing.assert_array_equal(default, with_masses)
+
+    # ------------------------------------------------------------------
+    # Interpolation — no channel, d1/d2 mass must be silently ignored
+    # ------------------------------------------------------------------
+    def test_interpolation_mass_override_is_ignored(self, sample_s_values):
+        mass_pts = [0.4, 0.7, 1.0, 1.3]
+        li = LinearInterpolation(s=sample_s_values, mass_points=mass_pts)
+        default = li(0, 0)
+        with_masses = li(0, 0, d1_mass=0.5, d2_mass=0.5)
+        np.testing.assert_array_equal(default, with_masses)
