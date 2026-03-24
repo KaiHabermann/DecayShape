@@ -1,0 +1,67 @@
+name: Release from Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v0.2.6)"
+        required: true
+
+jobs:
+  github-release:
+    name: Build, sign and publish GitHub Release for existing tag
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - name: Verify tag exists
+        run: |
+          git fetch --tags
+          git tag | grep -qx "${{ github.event.inputs.tag }}" || \
+            (echo "Tag '${{ github.event.inputs.tag }}' not found." && exit 1)
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Sign the dists with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v2.1.1
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create
+          '${{ github.event.inputs.tag }}'
+          --repo '${{ github.repository }}'
+          --title '${{ github.event.inputs.tag }}'
+          --notes ""
+
+      - name: Upload artifacts and signatures to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload
+          '${{ github.event.inputs.tag }}' dist/**
+          --repo '${{ github.repository }}'
