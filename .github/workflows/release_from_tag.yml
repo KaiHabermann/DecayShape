@@ -51,12 +51,12 @@ jobs:
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create
-          '${{ github.event.inputs.tag }}'
-          --repo '${{ github.repository }}'
-          --title '${{ github.event.inputs.tag }}'
-          --notes ""
+        run: |
+          gh release delete '${{ github.event.inputs.tag }}' --yes --repo '${{ github.repository }}' || true
+          gh release create '${{ github.event.inputs.tag }}' \
+            --repo '${{ github.repository }}' \
+            --title '${{ github.event.inputs.tag }}' \
+            --notes ""
 
       - name: Upload artifacts and signatures to GitHub Release
         env:
