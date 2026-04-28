@@ -428,7 +428,7 @@ class Exponential(Lineshape):
         slope = params["slope"]
         mass = np.sqrt(s)
 
-        return np.exp(slope * mass)
+        return np.exp(0.5 * slope * mass)
 
     def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
