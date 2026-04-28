@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from decayshape import FixedParam, RelativisticBreitWigner
-from decayshape.lineshapes import Flatte, Gaussian, LinearInterpolation
+from decayshape.lineshapes import Exponential, Flatte, Gaussian, LinearInterpolation
 from decayshape.particles import Channel, CommonParticles
 
 
@@ -248,6 +248,48 @@ class TestFlatte:
         assert np.any(imag_part != 0)  # Should have imaginary part above thresholds
 
 
+class TestExponential:
+    """Test Exponential lineshape."""
+
+    def test_create_exponential(self, sample_s_values):
+        exp_shape = Exponential(s=sample_s_values, slope=2.5)
+
+        assert isinstance(exp_shape.s, FixedParam)
+        assert exp_shape.slope == 2.5
+
+    def test_exponential_evaluation(self, sample_s_values):
+        exp_shape = Exponential(s=sample_s_values, slope=2.0)
+        result = exp_shape(0, 0)
+
+        assert isinstance(result, np.ndarray)
+        assert result.shape == sample_s_values.shape
+        assert np.all(np.isfinite(result))
+        assert np.all(result > 0)
+
+    def test_exponential_parameter_override(self, sample_s_values):
+        exp_shape = Exponential(s=sample_s_values, slope=2.0)
+
+        result_default = exp_shape(0, 0)
+        result_override = exp_shape(0, 0, slope=3.0)
+        result_positional = exp_shape(0, 0, 3.0)
+
+        assert not np.allclose(result_default, result_override)
+        assert np.allclose(result_override, result_positional)
+
+    def test_exponential_parameter_order(self, sample_s_values):
+        exp_shape = Exponential(s=sample_s_values, slope=1.0)
+        assert exp_shape.parameter_order == ["slope"]
+
+    def test_exponential_matches_expected_formula(self):
+        s_values = np.array([0.25, 1.0, 2.25])
+        exp_shape = Exponential(s=s_values, slope=2.0)
+
+        result = exp_shape(0, 0)
+        expected = np.exp(2.0 * np.sqrt(s_values))
+
+        np.testing.assert_allclose(result, expected, rtol=1e-12)
+
+
 # Note: Basic KMatrix class is not implemented, only KMatrixAdvanced
 # Tests for KMatrixAdvanced are in test_kmatrix.py
 
@@ -457,6 +499,15 @@ class TestMassOverride:
         g = Gaussian(s=sample_s_values, mean=0.8, width=0.1)
         default = g(0, 0)
         with_masses = g(0, 0, d1_mass=0.5, d2_mass=0.5)
+        np.testing.assert_array_equal(default, with_masses)
+
+    # ------------------------------------------------------------------
+    # Exponential — no channel, d1/d2 mass must be silently ignored
+    # ------------------------------------------------------------------
+    def test_exponential_mass_override_is_ignored(self, sample_s_values):
+        exp_shape = Exponential(s=sample_s_values, slope=2.0)
+        default = exp_shape(0, 0)
+        with_masses = exp_shape(0, 0, d1_mass=0.5, d2_mass=0.5)
         np.testing.assert_array_equal(default, with_masses)
 
     # ------------------------------------------------------------------
