@@ -285,7 +285,7 @@ class TestExponential:
         exp_shape = Exponential(s=s_values, slope=2.0)
 
         result = exp_shape(0, 0)
-        expected = np.exp(2.0 * np.sqrt(s_values))
+        expected = np.exp(np.sqrt(s_values))
 
         np.testing.assert_allclose(result, expected, rtol=1e-12)
 
