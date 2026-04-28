@@ -391,6 +391,52 @@ class Gaussian(Lineshape):
         return self.function(angular_momentum, spin, s_val, *args, **kwargs)
 
 
+class Exponential(Lineshape):
+    """
+    Square-root exponential lineshape.
+
+    Returns the square root of an exponential probability density in mass,
+    with the mass inferred from ``sqrt(s)`` to match the convention used by
+    the Gaussian lineshape in this module.
+    """
+
+    slope: float = Field(default=1.0, description="Exponential slope in mass")
+
+    @property
+    def parameter_order(self) -> list[str]:
+        """Return the order of parameters for positional arguments."""
+        return ["slope"]
+
+    def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
+        """
+        Evaluate the square-root exponential at given s values.
+
+        Args:
+            angular_momentum: Angular momentum parameter (not used for Exponential)
+            spin: Spin parameter (not used for Exponential)
+            s: Mandelstam variable s (mass squared) or array of s values
+            *args: Positional parameter overrides (slope)
+            **kwargs: Keyword parameter overrides
+
+        Returns:
+            Square root of an exponential PDF in mass
+        """
+        params = self._get_parameters(*args, **kwargs)
+
+        np = config.backend
+
+        slope = params["slope"]
+        mass = np.sqrt(s)
+
+        return np.exp(slope * mass)
+
+    def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
+        s_val = s if s is not None else (self.s.value if self.s is not None else None)
+        if s_val is None:
+            raise ValueError("s must be provided either at construction or call time")
+        return self.function(angular_momentum, spin, s_val, *args, **kwargs)
+
+
 class InterpolationBase(Lineshape):
     """
     Base class for interpolation-based lineshapes.

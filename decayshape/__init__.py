@@ -11,6 +11,7 @@ from .config import config, set_backend
 from .kmatrix_advanced import KMatrixAdvanced
 from .lineshapes import (
     CubicInterpolation,
+    Exponential,
     Flatte,
     Gaussian,
     GounarisSakurai,
@@ -37,6 +38,7 @@ available_lineshapes = {
     "GounarisSakurai": GounarisSakurai,
     "Flatte": Flatte,
     "Gaussian": Gaussian,
+    "Exponential": Exponential,
     "LinearInterpolation": LinearInterpolation,
     "QuadraticInterpolation": QuadraticInterpolation,
     "CubicInterpolation": CubicInterpolation,
@@ -51,6 +53,7 @@ __all__ = [
     "GounarisSakurai",
     "Flatte",
     "Gaussian",
+    "Exponential",
     "InterpolationBase",
     "LinearInterpolation",
     "QuadraticInterpolation",

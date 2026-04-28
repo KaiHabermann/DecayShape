@@ -11,7 +11,7 @@ from typing import Any, Optional
 import numpy as np
 
 from .kmatrix_advanced import KMatrixAdvanced
-from .lineshapes import Flatte, GounarisSakurai, RelativisticBreitWigner
+from .lineshapes import Exponential, Flatte, GounarisSakurai, RelativisticBreitWigner
 from .particles import Channel, CommonParticles
 
 
@@ -44,6 +44,12 @@ def get_all_lineshape_schemas() -> dict[str, dict[str, Any]]:
         schemas["GounarisSakurai"] = GounarisSakurai.to_json_schema()
     except Exception as e:
         schemas["GounarisSakurai"] = {"error": str(e)}
+
+    # Exponential
+    try:
+        schemas["Exponential"] = Exponential.to_json_schema()
+    except Exception as e:
+        schemas["Exponential"] = {"error": str(e)}
 
     # KMatrixAdvanced
     try:
@@ -98,6 +104,11 @@ def get_lineshape_schema(lineshape_name: str, **kwargs) -> dict[str, Any]:
         defaults.update(kwargs)
         lineshape = GounarisSakurai(s=s_vals, **defaults)
 
+    elif lineshape_name == "Exponential":
+        defaults = {"slope": 1.0}
+        defaults.update(kwargs)
+        lineshape = Exponential(s=s_vals, **defaults)
+
     elif lineshape_name == "KMatrixAdvanced":
         # Create default channels if not provided
         if "channels" not in kwargs:
@@ -127,7 +138,7 @@ def get_available_lineshapes() -> list[str]:
     Returns:
         List of lineshape class names
     """
-    return ["RelativisticBreitWigner", "Flatte", "GounarisSakurai", "KMatrixAdvanced"]
+    return ["RelativisticBreitWigner", "Flatte", "GounarisSakurai", "Exponential", "KMatrixAdvanced"]
 
 
 def export_schemas_to_file(filename: str, indent: Optional[int] = 2) -> None:
