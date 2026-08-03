@@ -10,6 +10,7 @@ from typing import Any, Generic, Optional, TypeVar, Union, get_args, get_origin
 import jax.numpy as jnp
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_core import PydanticUndefined
 
 from .config import config
 
@@ -62,7 +63,8 @@ class JsonSchemaMixin:
             # Extract field information
             field_type = field_info.annotation
             field_description = field_info.description or ""
-            field_default = field_info.default if field_info.default is not ... else None
+            resolved_default = field_info.get_default(call_default_factory=True)
+            field_default = resolved_default if resolved_default is not PydanticUndefined else None
 
             # Determine if this is a FixedParam field and get inner type
             inner_type = cls._extract_fixedparam_inner_type(field_type)
@@ -562,7 +564,8 @@ class Lineshape(LineshapeBase, JsonSchemaMixin, ABC):
             # Extract field information
             field_type = field_info.annotation
             field_description = field_info.description or ""
-            field_default = field_info.default if field_info.default is not ... else None
+            resolved_default = field_info.get_default(call_default_factory=True)
+            field_default = resolved_default if resolved_default is not PydanticUndefined else None
 
             # Determine if this is a FixedParam field and get inner type
             inner_type = cls._extract_fixedparam_inner_type(field_type)

@@ -63,16 +63,54 @@ class TestRelativisticBreitWigner:
         assert np.allclose(result_override, result_positional)
 
     def test_breit_wigner_parameter_order(self, sample_s_values):
-        """Test parameter order property."""
+        """Test parameter order property.
+
+        Single-channel instances (including via the legacy `channel=` kwarg) must keep
+        the exact positional parameter order they had before multi-channel support was
+        added - branching_fraction_i is only exposed positionally once there's more than
+        one channel to disambiguate.
+        """
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
         bw = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel], pole_mass=0.775, width=0.15)
 
-        expected_order = ["pole_mass", "width", "r", "branching_fraction_0"]
+        expected_order = ["pole_mass", "width", "r"]
         assert bw.parameter_order == expected_order
 
         bw = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel], pole_mass=0.775, width=0.15, q0=0.1)
-        expected_order = ["pole_mass", "width", "r", "branching_fraction_0", "q0"]
+        expected_order = ["pole_mass", "width", "r", "q0"]
         assert bw.parameter_order == expected_order
+
+    def test_breit_wigner_legacy_channel_kwarg_matches_channels(self, sample_s_values, rho_parameters):
+        """The old single-channel `channel=` kwarg must behave exactly like `channels=[channel]`."""
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
+
+        bw_legacy = RelativisticBreitWigner(s=sample_s_values, channel=pipi_channel, **params)
+        bw_new = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel], **params)
+
+        assert bw_legacy.channels.value == bw_new.channels.value
+        assert bw_legacy.branching_fractions == [1.0]
+        assert bw_legacy.parameter_order == bw_new.parameter_order
+        assert np.allclose(bw_legacy(1, 2), bw_new(1, 2))
+
+    def test_breit_wigner_legacy_channel_kwarg_accepts_fixed_param(self, sample_s_values, rho_parameters):
+        """The legacy `channel=FixedParam(value=...)` form (used before `channels` existed) must still work."""
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
+
+        bw = RelativisticBreitWigner(s=sample_s_values, channel=FixedParam(value=pipi_channel), **params)
+
+        assert bw.channels.value == [pipi_channel]
+        assert bw.branching_fractions == [1.0]
+
+    def test_breit_wigner_positional_q0_override_backward_compatible(self, sample_s_values):
+        """A single-channel instance must still accept (pole_mass, width, r, q0) positionally."""
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
+        bw = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel], pole_mass=0.775, width=0.15, r=1.0, q0=0.1)
+
+        result_positional = bw(2, 1, 0.775, 0.15, 1.0, 0.2)
+        result_kwarg = bw(2, 1, q0=0.2)
+        assert np.allclose(result_positional, result_kwarg)
 
     def test_breit_wigner_resonance_behavior(self):
         """Test that Breit-Wigner shows resonance behavior."""
@@ -111,11 +149,12 @@ class TestRelativisticBreitWigner:
         assert np.max(np.abs(result_narrow)) > np.max(np.abs(result_wide))
 
     def test_breit_wigner_angular_momentum(self, sample_s_values):
-        """Test effect of angular momentum on the outer barrier factors."""
+        """Test effect of angular momentum on the outer barrier factors and the outer channel's width."""
         base_params = {"pole_mass": 0.775, "width": 0.15, "r": 1.0}
 
-        # The width channel's own L (Channel.l) is independent of the call-time angular_momentum,
-        # which only affects the outer barrier factors.
+        # For the outer (first) channel, F, B, and its own width contribution all use the
+        # call-time angular_momentum (Channel.l is irrelevant here), matching pre-multi-channel
+        # single-channel behaviour exactly.
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
         bw = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel], **base_params)
 
@@ -124,6 +163,54 @@ class TestRelativisticBreitWigner:
 
         # Results should be different due to different outer form factors
         assert not np.allclose(result_s, result_p)
+
+    def test_breit_wigner_multichannel_branching_fraction_negative_rejected(self, sample_s_values, rho_parameters):
+        """A negative branching fraction is unphysical and must raise."""
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS, l=2)
+
+        with pytest.raises(Exception):
+            RelativisticBreitWigner(
+                s=sample_s_values,
+                channels=[pipi_channel, kk_channel],
+                branching_fractions=[1.5, -0.5],
+                **params,
+            )
+
+    def test_breit_wigner_multichannel_branching_fraction_must_sum_to_one(self, sample_s_values, rho_parameters):
+        """branching_fractions that don't sum to 1.0 must raise."""
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS, l=2)
+
+        with pytest.raises(Exception):
+            RelativisticBreitWigner(
+                s=sample_s_values,
+                channels=[pipi_channel, kk_channel],
+                branching_fractions=[0.3, 0.3],
+                **params,
+            )
+
+    def test_breit_wigner_branching_fractions_override_length_validated(self, sample_s_values, rho_parameters):
+        """Overriding the whole `branching_fractions` list at call time must still be length-checked."""
+        params = {k: v for k, v in rho_parameters.items() if k != "L"}
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS, l=2)
+
+        bw = RelativisticBreitWigner(
+            s=sample_s_values,
+            channels=[pipi_channel, kk_channel],
+            branching_fractions=[0.7, 0.3],
+            **params,
+        )
+
+        with pytest.raises(ValueError):
+            bw(2, 1, branching_fractions=[1.0])
+
+        result_override = bw(2, 1, branching_fractions=[0.4, 0.6])
+        assert np.all(np.isfinite(result_override))
+        assert not np.allclose(result_override, bw(2, 1))
 
     def test_breit_wigner_q0_calculation(self, sample_s_values):
         """Test automatic q0 calculation."""
@@ -420,7 +507,7 @@ class TestLineshapeBase:
 
         # Too many positional arguments
         with pytest.raises(ValueError, match="Too many positional arguments"):
-            bw(1, 2, 0.775, 0.15, 1.0, 0.4, 999, 999)  # 8 args, but only 5 expected (after spin, angular_momentum)
+            bw(1, 2, 0.775, 0.15, 1.0, 0.4, 999, 999)  # 6 args after spin/angular_momentum, but only 3 expected
 
 
 class TestMassOverride:
