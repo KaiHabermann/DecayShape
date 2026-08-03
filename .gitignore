@@ -197,7 +197,7 @@ figures/
 
 # Data files (uncomment if you have large data files you don't want to track)
 # *.csv
-# *.json
+*.json
 # *.pkl
 # *.pickle
 # *.h5

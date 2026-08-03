@@ -10,11 +10,12 @@ scale = 1
 mass = np.linspace(0.3 * scale, 1.2 * scale, 500)
 s = mass**2
 
-# Define channel (pi+ pi-)
+# Define channel (pi+ pi-), L=1 (doubled=2) since rho(770) is a P-wave resonance
 # pipi = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
 pipi = Channel(
     particle1=Particle(mass=0.13957018 * scale, spin=0, parity=-1),
     particle2=Particle(mass=0.13957018 * scale, spin=0, parity=-1),
+    l=2,
 )
 
 # Instantiate Gounaris-Sakurai lineshape
@@ -34,7 +35,7 @@ gs = GounarisSakurai(
 # Instantiate Relativistic Breit-Wigner for comparison
 rbw = RelativisticBreitWigner(
     s=s,
-    channel=FixedParam(value=pipi),
+    channels=[pipi],
     pole_mass=0.775 * scale,
     width=0.150 * scale,
     r=1.0 / scale,  # Standard interaction radius ~1 fm ~ 5 GeV^-1, but using default 1.0 from code

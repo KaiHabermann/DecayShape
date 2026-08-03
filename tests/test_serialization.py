@@ -16,7 +16,7 @@ class TestRelativisticBreitWignerSerialization:
         s_vals = np.linspace(0.5, 0.8, 5)
         # Create a channel (rho -> pi+ pi-)
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        bw = RelativisticBreitWigner(s=s_vals, channel=pipi_channel, pole_mass=0.775, width=0.15, r=1.0)
+        bw = RelativisticBreitWigner(s=s_vals, channels=[pipi_channel], pole_mass=0.775, width=0.15, r=1.0)
 
         data = bw.model_dump()
         assert isinstance(data, dict)
@@ -29,7 +29,7 @@ class TestRelativisticBreitWignerSerialization:
         s_vals = np.array([0.5, 0.6])
         # Create a channel (rho -> pi+ pi-)
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        bw = RelativisticBreitWigner(s=s_vals, channel=pipi_channel, pole_mass=0.775, width=0.15)
+        bw = RelativisticBreitWigner(s=s_vals, channels=[pipi_channel], pole_mass=0.775, width=0.15)
         json_str = bw.model_dump_json()
         assert isinstance(json_str, str)
         parsed = json.loads(json_str)

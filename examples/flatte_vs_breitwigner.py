@@ -47,7 +47,7 @@ def main():
     # The simple BW only knows about the pipi channel
     rbw = RelativisticBreitWigner(
         s=s,
-        channel=FixedParam(value=pipi),
+        channels=[pipi],
         pole_mass=m0,
         width=(g_pi + g_k) / 2,  # Crude estimate of effective width
         r=1.0,
