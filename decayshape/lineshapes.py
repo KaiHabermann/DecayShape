@@ -42,7 +42,8 @@ class RelativisticBreitWigner(Lineshape):
     Any additional channels (index 1+) contribute their own branching-fraction-weighted
     mass-dependent width, each evaluated with that channel's own angular momentum
     (``Channel.l``), since the call-time angular momentum only describes the outer
-    (first) channel's decay.
+    (first) channel's decay. ``branching_fractions`` is a fixed parameter (set at
+    construction time, not adjusted during a fit).
 
     For backward compatibility, the legacy single-channel ``channel=`` keyword is
     still accepted and is mapped to ``channels=[channel]`` with
@@ -58,18 +59,19 @@ class RelativisticBreitWigner(Lineshape):
             "also used to build the outer Blatt-Weiskopf form factor and barrier factor."
         ),
     )
+    branching_fractions: FixedParam[list[float]] = Field(
+        default_factory=lambda: FixedParam(value=[]),
+        description=(
+            "Branching fraction for each entry in 'channels' (same order/length). Fixed at construction "
+            "time - not adjusted during optimization. Must be non-negative and sum to 1.0. Defaults to an "
+            "equal split."
+        ),
+    )
 
     # Optimization parameters
     pole_mass: float = Field(default=0.775, description="Pole mass of the resonance")
     width: float = Field(default=0.15, description="Resonance width")
     r: float = Field(default=1.0, description="Hadron radius parameter for Blatt-Weiskopf form factor")
-    branching_fractions: list[float] = Field(
-        default_factory=list,
-        description=(
-            "Branching fraction for each entry in 'channels' (same order/length). Must be non-negative and "
-            "sum to 1.0. Defaults to an equal split."
-        ),
-    )
     q0: Optional[float] = Field(
         default=None, description="Reference momentum for the outer barrier factors (calculated from channels[0] if None)"
     )
@@ -110,10 +112,10 @@ class RelativisticBreitWigner(Lineshape):
         if n_channels == 0:
             raise ValueError("RelativisticBreitWigner requires at least one channel in 'channels'")
 
-        if not self.branching_fractions:
-            self.branching_fractions = [1.0 / n_channels] * n_channels
+        if not self.branching_fractions.value:
+            self.branching_fractions = FixedParam(value=[1.0 / n_channels] * n_channels)
         else:
-            self._validate_branching_fractions(self.branching_fractions, n_channels)
+            self._validate_branching_fractions(self.branching_fractions.value, n_channels)
 
         return self
 
@@ -121,52 +123,9 @@ class RelativisticBreitWigner(Lineshape):
     def parameter_order(self) -> list[str]:
         """Return the order of parameters for positional arguments."""
         params = ["pole_mass", "width", "r"]
-        # Only expose per-channel branching fractions positionally when there is more than
-        # one channel, so single-channel (incl. legacy `channel=`) construction keeps the
-        # exact positional parameter order it had before multi-channel support was added.
-        if len(self.channels.value) > 1:
-            for i in range(len(self.channels.value)):
-                params.append(f"branching_fraction_{i}")
         if self.q0 is not None:
             params.append("q0")
         return params
-
-    def _get_parameters(self, *args, **kwargs) -> dict[str, Any]:
-        """Get parameters with overrides, expanding flat branching_fraction_i overrides into a list."""
-        params = self.get_optimization_parameters().copy()
-        args, kwargs = self._parse_args_and_kwargs(args, kwargs)
-
-        n_channels = len(self.channels.value)
-        if "branching_fractions" in kwargs:
-            branching_fractions = list(kwargs.pop("branching_fractions"))
-            if len(branching_fractions) != n_channels:
-                raise ValueError(f"branching_fractions override must have length {n_channels}, got {len(branching_fractions)}")
-            for i in range(n_channels):
-                param_name = f"branching_fraction_{i}"
-                if param_name in kwargs:
-                    branching_fractions[i] = kwargs.pop(param_name)
-        else:
-            branching_fractions = []
-            for i in range(n_channels):
-                param_name = f"branching_fraction_{i}"
-                branching_fractions.append(kwargs.pop(param_name, self.branching_fractions[i]))
-        self._validate_branching_fractions(branching_fractions, n_channels)
-        params["branching_fractions"] = branching_fractions
-
-        for param_name, value in kwargs.items():
-            params[param_name] = value
-
-        return params
-
-    def parameters(self) -> dict[str, Any]:
-        """Get parameters in parameter_order, expanding branching_fractions into flat entries."""
-        param_dict = {"pole_mass": self.pole_mass, "width": self.width, "r": self.r}
-        if len(self.channels.value) > 1:
-            for i, branching_fraction in enumerate(self.branching_fractions):
-                param_dict[f"branching_fraction_{i}"] = branching_fraction
-        if self.q0 is not None:
-            param_dict["q0"] = self.q0
-        return param_dict
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
         """
@@ -176,7 +135,7 @@ class RelativisticBreitWigner(Lineshape):
             angular_momentum: Angular momentum parameter (doubled values: 0, 2, 4, ...)
             spin: Spin parameter (doubled values: 1, 3, 5, ...)
             s: Mandelstam variable s (mass squared) or array of s values
-            *args: Positional parameter overrides (width, r, branching_fraction_i, q0)
+            *args: Positional parameter overrides (width, r, q0)
             **kwargs: Keyword parameter overrides
 
         Returns:
@@ -212,10 +171,11 @@ class RelativisticBreitWigner(Lineshape):
         # single-channel result exactly. Any additional channels use their own momentum,
         # own q0, and their own angular momentum (Channel.l), since the call-time L only
         # describes the outer channel's decay.
-        gamma_s = params["branching_fractions"][0] * mass_dependent_width(
+        branching_fractions = self.branching_fractions.value
+        gamma_s = branching_fractions[0] * mass_dependent_width(
             q, s, params["q0"], params["pole_mass"], params["width"], L, params["r"]
         )
-        for width_channel, branching_fraction in zip(self.channels.value[1:], params["branching_fractions"][1:]):
+        for width_channel, branching_fraction in zip(self.channels.value[1:], branching_fractions[1:]):
             width_channel_L = width_channel.l.value // 2
             q_channel = width_channel.momentum(s)
             q0_channel = width_channel.momentum(params["pole_mass"] ** 2)

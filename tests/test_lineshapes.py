@@ -26,7 +26,7 @@ class TestRelativisticBreitWigner:
         assert bw.pole_mass == rho_parameters["pole_mass"]
         assert bw.width == rho_parameters["width"]
         assert bw.r == rho_parameters["r"]
-        assert bw.branching_fractions == [1.0]
+        assert bw.branching_fractions.value == [1.0]
 
     def test_breit_wigner_evaluation(self, sample_s_values, rho_parameters):
         """Test evaluating Breit-Wigner lineshape."""
@@ -65,10 +65,10 @@ class TestRelativisticBreitWigner:
     def test_breit_wigner_parameter_order(self, sample_s_values):
         """Test parameter order property.
 
-        Single-channel instances (including via the legacy `channel=` kwarg) must keep
-        the exact positional parameter order they had before multi-channel support was
-        added - branching_fraction_i is only exposed positionally once there's more than
-        one channel to disambiguate.
+        branching_fractions is a fixed parameter, so it never appears in parameter_order,
+        regardless of channel count - single-channel instances (including via the legacy
+        `channel=` kwarg) keep the exact positional parameter order they had before
+        multi-channel support was added.
         """
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
         bw = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel], pole_mass=0.775, width=0.15)
@@ -89,7 +89,7 @@ class TestRelativisticBreitWigner:
         bw_new = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel], **params)
 
         assert bw_legacy.channels.value == bw_new.channels.value
-        assert bw_legacy.branching_fractions == [1.0]
+        assert bw_legacy.branching_fractions.value == [1.0]
         assert bw_legacy.parameter_order == bw_new.parameter_order
         assert np.allclose(bw_legacy(1, 2), bw_new(1, 2))
 
@@ -101,7 +101,7 @@ class TestRelativisticBreitWigner:
         bw = RelativisticBreitWigner(s=sample_s_values, channel=FixedParam(value=pipi_channel), **params)
 
         assert bw.channels.value == [pipi_channel]
-        assert bw.branching_fractions == [1.0]
+        assert bw.branching_fractions.value == [1.0]
 
     def test_breit_wigner_positional_q0_override_backward_compatible(self, sample_s_values):
         """A single-channel instance must still accept (pole_mass, width, r, q0) positionally."""
@@ -192,8 +192,10 @@ class TestRelativisticBreitWigner:
                 **params,
             )
 
-    def test_breit_wigner_branching_fractions_override_length_validated(self, sample_s_values, rho_parameters):
-        """Overriding the whole `branching_fractions` list at call time must still be length-checked."""
+    def test_breit_wigner_branching_fractions_is_fixed_not_overridable_at_call_time(self, sample_s_values, rho_parameters):
+        """branching_fractions is a fixed parameter: it is set at construction and cannot be
+        changed per call (unlike pole_mass/width/r/q0), since it is not meant to be adjusted
+        during a fit."""
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
         kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS, l=2)
@@ -205,12 +207,10 @@ class TestRelativisticBreitWigner:
             **params,
         )
 
-        with pytest.raises(ValueError):
-            bw(2, 1, branching_fractions=[1.0])
-
-        result_override = bw(2, 1, branching_fractions=[0.4, 0.6])
-        assert np.all(np.isfinite(result_override))
-        assert not np.allclose(result_override, bw(2, 1))
+        assert isinstance(bw.branching_fractions, FixedParam)
+        assert "branching_fractions" in bw.get_fixed_parameters()
+        assert "branching_fractions" not in bw.get_optimization_parameters()
+        assert bw.branching_fractions.value == [0.7, 0.3]
 
     def test_breit_wigner_q0_calculation(self, sample_s_values):
         """Test automatic q0 calculation."""
@@ -295,7 +295,7 @@ class TestRelativisticBreitWigner:
 
         bw = RelativisticBreitWigner(s=sample_s_values, channels=[pipi_channel, kk_channel], **params)
 
-        assert bw.branching_fractions == [0.5, 0.5]
+        assert bw.branching_fractions.value == [0.5, 0.5]
 
     def test_breit_wigner_multichannel_branching_fraction_length_validation(self, sample_s_values, rho_parameters):
         """branching_fractions length must match channels length."""
@@ -311,8 +311,9 @@ class TestRelativisticBreitWigner:
                 **params,
             )
 
-    def test_breit_wigner_multichannel_parameter_order_and_override(self, sample_s_values, rho_parameters):
-        """Positional/keyword overrides of branching_fraction_i must be reflected in the result."""
+    def test_breit_wigner_multichannel_parameter_order_unaffected_by_channel_count(self, sample_s_values, rho_parameters):
+        """parameter_order never includes branching fractions, since they are fixed, regardless
+        of how many channels are configured."""
         params = {k: v for k, v in rho_parameters.items() if k != "L"}
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS, l=2)
         kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS, l=2)
@@ -324,14 +325,7 @@ class TestRelativisticBreitWigner:
             **params,
         )
 
-        assert bw.parameter_order == ["pole_mass", "width", "r", "branching_fraction_0", "branching_fraction_1"]
-
-        result_kwarg_override = bw(2, 1, branching_fraction_0=0.9, branching_fraction_1=0.1)
-        result_default = bw(2, 1)
-        assert not np.allclose(result_default, result_kwarg_override)
-
-        result_positional = bw(2, 1, params["pole_mass"], params["width"], params["r"], 0.9, 0.1)
-        assert np.allclose(result_positional, result_kwarg_override)
+        assert bw.parameter_order == ["pole_mass", "width", "r"]
 
 
 class TestFlatte:
@@ -470,6 +464,8 @@ class TestLineshapeBase:
 
         fixed_params = bw.get_fixed_parameters()
         assert "s" in fixed_params
+        assert "channels" in fixed_params
+        assert "branching_fractions" in fixed_params
         np.testing.assert_array_equal(fixed_params["s"], sample_s_values)
 
     def test_optimization_parameters(self, sample_s_values, rho_parameters):
@@ -483,9 +479,9 @@ class TestLineshapeBase:
         assert "pole_mass" in opt_params
         assert "width" in opt_params
         assert "r" in opt_params
-        assert "branching_fractions" in opt_params
         assert "q0" in opt_params
         assert "s" not in opt_params  # s is fixed
+        assert "branching_fractions" not in opt_params  # branching_fractions is fixed, not optimized
 
     def test_parameter_override_validation(self, sample_s_values):
         """Test parameter override validation."""
