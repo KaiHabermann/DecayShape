@@ -125,6 +125,7 @@ class TestRelativisticBreitWigner:
             channels=[pipi_channel],
             pole_mass=0.775,
             width=0.15,
+            width_r=1.0,
             threshold_behaviour=BlattWeisskopfBarrier(r=1.0, q0=0.1),
         )
 

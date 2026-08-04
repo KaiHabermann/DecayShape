@@ -66,6 +66,15 @@ class JsonSchemaMixin:
             resolved_default = field_info.get_default(call_default_factory=True)
             field_default = resolved_default if resolved_default is not PydanticUndefined else None
 
+            # A discriminated union (e.g. Field(discriminator="kind")) is a choice between several
+            # named strategy classes, each with its own parameters - render it as such instead of
+            # picking one arbitrary member (the type-hint-only path below has no way to know which).
+            if field_info.discriminator is not None:
+                param_info = cls._build_discriminated_union_info(field_type, field_info.discriminator, field_default)
+                param_info["description"] = field_description
+                regular_params[field_name] = param_info
+                continue
+
             # Determine if this is a FixedParam field and get inner type
             inner_type = cls._extract_fixedparam_inner_type(field_type)
             is_fixed_param = inner_type is not None
@@ -105,6 +114,39 @@ class JsonSchemaMixin:
         }
 
         return schema
+
+    @classmethod
+    def _build_discriminated_union_info(cls, field_type, discriminator: str, default_instance) -> dict[str, Any]:
+        """
+        Build schema info for a discriminated-union field (e.g. Field(discriminator="kind")): a
+        choice between several named strategy classes, each with its own parameter set.
+
+        Args:
+            field_type: The field's annotation - Union[ClassA, ClassB, ...]
+            discriminator: Name of the literal field each member class uses to tag itself
+            default_instance: The field's resolved default value (an instance of one member class)
+
+        Returns:
+            Dictionary with "type", "discriminator", "default" (the default instance's
+            discriminator value), and "options" (discriminator value -> that class's own schema)
+        """
+        options = {}
+        for member_cls in get_args(field_type):
+            member_schema = member_cls.to_json_schema(exclude_fields=[discriminator])
+            kind_value = member_cls.model_fields[discriminator].default
+            options[kind_value] = {
+                "class": member_schema["model_type"],
+                "description": member_schema["description"],
+                "parameters": member_schema["parameters"],
+                "fixed_parameters": member_schema["fixed_parameters"],
+            }
+
+        return {
+            "type": "discriminated_union",
+            "discriminator": discriminator,
+            "default": getattr(default_instance, discriminator, None),
+            "options": options,
+        }
 
     @classmethod
     def _type_to_json_info(cls, type_hint) -> dict[str, Any]:

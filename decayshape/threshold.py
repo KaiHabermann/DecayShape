@@ -64,8 +64,19 @@ class BlattWeisskopfBarrier(ThresholdFunction):
     """Blatt-Weisskopf form factor times angular-momentum barrier factor. The default threshold behaviour."""
 
     kind: Literal["blatt_weisskopf_barrier"] = "blatt_weisskopf_barrier"
-    r: float = Field(1e-3, description="Hadron radius parameter for the Blatt-Weisskopf form factor")
-    q0: Optional[float] = Field(None, description="Reference momentum for the barrier factor")
+    r: float = Field(
+        1e-3,
+        description=(
+            "Hadron radius parameter (MeV⁻¹) for the outer barrier factor, i.e. the one "
+            "multiplying the lineshape's amplitude directly. Typically 1-5 GeV⁻¹ "
+            "(≈ 1e-3 to 5e-3 MeV⁻¹). Distinct from any per-channel or width-only radius "
+            "(e.g. width_r, channel_r, r1/r2) the lineshape may also declare - those govern the "
+            "mass-dependent width/K-matrix calculation and are independent of this one."
+        ),
+    )
+    q0: Optional[float] = Field(
+        None, description="Reference momentum (MeV) for the outer barrier factor; computed from pole_mass if unset"
+    )
 
     @property
     def parameter_order(self) -> list[str]:
@@ -95,7 +106,9 @@ class BarrierFactor(ThresholdFunction):
     """Angular-momentum barrier factor only, without the Blatt-Weisskopf form factor."""
 
     kind: Literal["barrier_factor"] = "barrier_factor"
-    q0: Optional[float] = Field(None, description="Reference momentum for the barrier factor")
+    q0: Optional[float] = Field(
+        None, description="Reference momentum (MeV) for the outer barrier factor; computed from pole_mass if unset"
+    )
 
     @property
     def parameter_order(self) -> list[str]:

@@ -30,7 +30,7 @@ class KMatrixAdvanced(Lineshape):
     )
 
     # Optimization parameters (poles and couplings)
-    pole_masses: list[float] = Field(..., description="List of pole masses")
+    pole_masses: list[float] = Field(..., description="List of pole masses (MeV)")
     production_couplings: list[float] = Field(
         default_factory=list, description="Production couplings from initial state to each pole (length = n_poles)"
     )
@@ -38,10 +38,11 @@ class KMatrixAdvanced(Lineshape):
         default_factory=list, description="Decay couplings from each pole to each channel (length = n_poles × n_channels)"
     )
     channel_r: float = Field(
-        default=1.0,
+        default=1e-3,
         description=(
-            "Hadron radius parameter shared by all channels' internal K-matrix factors. Independent of "
-            "threshold_behaviour's own radius, which only governs the output channel's outer barrier factor."
+            "Hadron radius parameter (MeV⁻¹) shared by all channels' internal K-matrix factors (Channel.n), "
+            "not the outer barrier factor. Typically 1-5 GeV⁻¹ (≈ 1e-3 to 5e-3 MeV⁻¹). Independent of "
+            "threshold_behaviour.r, which governs only the output channel's outer barrier factor."
         ),
     )
 

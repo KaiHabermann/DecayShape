@@ -7,7 +7,6 @@ from abc import ABC, abstractmethod
 from typing import Annotated, Any, Optional, Union, get_args, get_origin
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic_core import PydanticUndefined
 
 from .config import config
 from .schema_base import FixedParam, JsonSchemaMixin, Numerical, T  # noqa: F401
@@ -233,80 +232,10 @@ class Lineshape(LineshapeBase, JsonSchemaMixin, ABC):
         if exclude_fields is None:
             exclude_fields = []
 
-        # Always exclude 's' for lineshapes; threshold_behaviour is merged in separately below
-        exclude_fields = list(exclude_fields) + ["s", "threshold_behaviour"]
+        # Always exclude 's' for lineshapes
+        exclude_fields = list(exclude_fields) + ["s"]
 
-        # Use the mixin's base implementation
-        # Get the class name and description
-        class_name = cls.__name__
-        class_doc = cls.__doc__ or ""
-
-        # Get model fields information
-        model_fields = cls.model_fields
-
-        # Separate fixed and regular parameters
-        fixed_params = {}
-        regular_params = {}
-
-        for field_name, field_info in model_fields.items():
-            # Skip excluded fields
-            if field_name in exclude_fields:
-                continue
-
-            # Extract field information
-            field_type = field_info.annotation
-            field_description = field_info.description or ""
-            resolved_default = field_info.get_default(call_default_factory=True)
-            field_default = resolved_default if resolved_default is not PydanticUndefined else None
-
-            # Determine if this is a FixedParam field and get inner type
-            inner_type = cls._extract_fixedparam_inner_type(field_type)
-            is_fixed_param = inner_type is not None
-
-            # Convert type to JSON-serializable format
-            type_info = cls._type_to_json_info(inner_type if is_fixed_param else field_type)
-
-            # Create parameter info
-            param_info = {
-                "type": type_info["type"],
-                "description": field_description,
-                "default": cls._serialize_default_value(field_default),
-                "constraints": type_info.get("constraints", {}),
-                "items": type_info.get("items"),  # For arrays/lists
-                "properties": type_info.get("properties"),  # For objects
-                "schema": type_info.get("schema"),  # For nested models with JsonSchemaMixin
-                "class": type_info.get("class"),  # Class name for object types
-                "item_schema": type_info.get("item_schema"),  # Schema for array items
-                "optional": type_info.get("optional", False),  # Mark if parameter is optional
-            }
-
-            # Remove None values to keep JSON clean
-            param_info = {k: v for k, v in param_info.items() if v is not None}
-
-            # Add to appropriate category
-            if is_fixed_param:
-                fixed_params[field_name] = param_info
-            else:
-                regular_params[field_name] = param_info
-
-        # Merge in the parameters contributed by threshold_behaviour, so its own
-        # optimization/fixed parameters (e.g. r, q0) appear flattened alongside
-        # this lineshape's own, exactly like any other call-time parameter.
-        threshold_field = model_fields.get("threshold_behaviour")
-        if threshold_field is not None:
-            threshold_cls = type(threshold_field.get_default(call_default_factory=True))
-            # "kind" is the pydantic discriminator used for serialization, not a physics parameter.
-            threshold_schema = threshold_cls.to_json_schema(exclude_fields=["kind"])
-            regular_params.update(threshold_schema["parameters"])
-            fixed_params.update(threshold_schema["fixed_parameters"])
-
-        # Build the complete schema
-        schema = {
-            "model_type": class_name,
-            "description": class_doc.strip(),
-            "fixed_parameters": fixed_params,
-            "parameters": regular_params,
-        }
+        schema = super().to_json_schema(exclude_fields=exclude_fields)
 
         # Customize the schema for lineshapes
         schema["lineshape_type"] = schema.pop("model_type")

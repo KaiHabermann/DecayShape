@@ -63,20 +63,21 @@ class RelativisticBreitWigner(Lineshape):
     )
 
     # Optimization parameters
-    pole_mass: float = Field(default=0.775, description="Pole mass of the resonance")
-    width: float = Field(default=0.15, description="Resonance width")
+    pole_mass: float = Field(default=775.0, description="Pole mass of the resonance (MeV)")
+    width: float = Field(default=150.0, description="Resonance width (MeV)")
     width_r: float = Field(
-        default=1.0,
+        default=1e-3,
         description=(
-            "Hadron radius parameter for the mass-dependent width calculation. Independent of "
-            "threshold_behaviour's own radius, which only governs the outer barrier factor."
+            "Hadron radius parameter (MeV⁻¹) used only in the mass-dependent width calculation, not the "
+            "outer barrier factor. Typically 1-5 GeV⁻¹ (≈ 1e-3 to 5e-3 MeV⁻¹). Independent of "
+            "threshold_behaviour.r, which governs the outer barrier factor multiplying the amplitude."
         ),
     )
     width_q0: Optional[float] = Field(
         default=None,
         description=(
-            "Reference momentum for the mass-dependent width calculation (calculated from channels[0] if "
-            "None). Independent of threshold_behaviour's own reference momentum."
+            "Reference momentum (MeV) for the mass-dependent width calculation (calculated from channels[0] "
+            "if None). Independent of threshold_behaviour.q0, which is used for the outer barrier factor."
         ),
     )
 
@@ -241,24 +242,27 @@ class GounarisSakurai(Lineshape):
     channel: FixedParam[Channel] = Field(..., description="Decay channel (usually pi+pi-)")
 
     # Optimization parameters
-    pole_mass: float = Field(default=775, description="Pole mass of the resonance (m0)")
-    width: float = Field(default=150, description="Resonance width (Gamma0)")
-    omega_mass: float = Field(default=782.65, description="Omega mass or mass of interfering particle")
-    omega_width: float = Field(default=8.49, description="Omega width or width of interfering particle")
+    pole_mass: float = Field(default=775, description="Pole mass of the resonance (m0, MeV)")
+    width: float = Field(default=150, description="Resonance width (Gamma0, MeV)")
+    omega_mass: float = Field(default=782.65, description="Omega mass or mass of interfering particle (MeV)")
+    omega_width: float = Field(default=8.49, description="Omega width or width of interfering particle (MeV)")
     delta_mag: float = Field(default=0.0002, description="Magnitude of interfering particle")
     delta_phi: float = Field(default=1.65, description="Phase of interfering particle in radians")
     width_r: float = Field(
-        default=1.0,
+        default=1e-3,
         description=(
-            "Hadron radius parameter for the mass-dependent width/dispersive-correction calculation. "
-            "Independent of threshold_behaviour's own radius, which only governs the outer barrier factor."
+            "Hadron radius parameter (MeV⁻¹) for the mass-dependent width/dispersive-correction "
+            "calculation, not the outer barrier factor. Typically 1-5 GeV⁻¹ (≈ 1e-3 to 5e-3 MeV⁻¹). "
+            "Independent of threshold_behaviour.r, which governs the outer barrier factor multiplying "
+            "the amplitude."
         ),
     )
     width_q0: Optional[float] = Field(
         default=None,
         description=(
-            "Reference momentum for the mass-dependent width/dispersive-correction calculation (calculated "
-            "from channel if None). Independent of threshold_behaviour's own reference momentum."
+            "Reference momentum (MeV) for the mass-dependent width/dispersive-correction calculation "
+            "(calculated from channel if None). Independent of threshold_behaviour.q0, which is used for "
+            "the outer barrier factor."
         ),
     )
 
@@ -365,13 +369,25 @@ class Flatte(Lineshape):
     channel2: FixedParam[Channel] = Field(..., description="Second decay channel")
 
     # Optimization parameters
-    pole_mass: float = Field(description="Pole mass of the resonance")
-    width1: float = Field(description="Width for first channel")
-    width2: float = Field(description="Width for second channel")
-    r1: float = Field(description="Hadron radius for first channel")
-    r2: float = Field(description="Hadron radius for second channel")
-    q01: Optional[float] = Field(default=None, description="Reference momentum for first channel")
-    q02: Optional[float] = Field(default=None, description="Reference momentum for second channel")
+    pole_mass: float = Field(description="Pole mass of the resonance (MeV)")
+    width1: float = Field(description="Width for first channel (MeV)")
+    width2: float = Field(description="Width for second channel (MeV)")
+    r1: float = Field(
+        description=(
+            "Hadron radius parameter (MeV⁻¹) for the first channel's mass-dependent width calculation. "
+            "Typically 1-5 GeV⁻¹ (≈ 1e-3 to 5e-3 MeV⁻¹). Independent of threshold_behaviour.r, which "
+            "governs the outer barrier factor (evaluated on channel1) multiplying the amplitude."
+        )
+    )
+    r2: float = Field(
+        description=(
+            "Hadron radius parameter (MeV⁻¹) for the second channel's mass-dependent width calculation. "
+            "Typically 1-5 GeV⁻¹ (≈ 1e-3 to 5e-3 MeV⁻¹). Independent of threshold_behaviour.r; there is no "
+            "separate outer barrier for channel2."
+        )
+    )
+    q01: Optional[float] = Field(default=None, description="Reference momentum (MeV) for first channel")
+    q02: Optional[float] = Field(default=None, description="Reference momentum (MeV) for second channel")
 
     @property
     def _own_parameter_order(self) -> list[str]:
@@ -456,8 +472,8 @@ class Gaussian(Lineshape):
     """
 
     # Optimization parameters
-    mean: float = Field(default=0.0, description="Mean of the Gaussian")
-    width: float = Field(default=1.0, description="Width (standard deviation) of the Gaussian")
+    mean: float = Field(default=0.0, description="Mean of the Gaussian (MeV)")
+    width: float = Field(default=1000.0, description="Width (standard deviation) of the Gaussian (MeV)")
 
     threshold_behaviour: AnyThresholdFunction = Field(
         default_factory=ConstantThreshold,
@@ -518,7 +534,7 @@ class Exponential(Lineshape):
     the Gaussian lineshape in this module.
     """
 
-    slope: float = Field(default=1.0, description="Exponential slope in mass")
+    slope: float = Field(default=1e-3, description="Exponential slope in mass (MeV⁻¹)")
 
     threshold_behaviour: AnyThresholdFunction = Field(
         default_factory=ConstantThreshold,

@@ -146,6 +146,74 @@ class TestJsonSchemaMixinLineshape:
         assert "angular_momentum" not in schema["fixed_parameters"]
 
 
+class TestJsonSchemaMixinDiscriminatedUnion:
+    """Test that threshold_behaviour (a discriminated union) exposes every strategy option."""
+
+    def test_threshold_behaviour_lists_every_option(self):
+        from decayshape.lineshapes import RelativisticBreitWigner
+
+        schema = RelativisticBreitWigner.to_json_schema()
+        threshold_info = schema["optimization_parameters"]["threshold_behaviour"]
+
+        assert threshold_info["type"] == "discriminated_union"
+        assert threshold_info["discriminator"] == "kind"
+        assert threshold_info["default"] == "blatt_weisskopf_barrier"
+        assert set(threshold_info["options"].keys()) == {
+            "blatt_weisskopf_barrier",
+            "barrier_factor",
+            "constant_threshold",
+        }
+
+    def test_each_option_exposes_only_its_own_parameters(self):
+        from decayshape.lineshapes import RelativisticBreitWigner
+
+        options = RelativisticBreitWigner.to_json_schema()["optimization_parameters"]["threshold_behaviour"]["options"]
+
+        assert set(options["blatt_weisskopf_barrier"]["parameters"].keys()) == {"r", "q0"}
+        assert options["blatt_weisskopf_barrier"]["class"] == "BlattWeisskopfBarrier"
+
+        assert set(options["barrier_factor"]["parameters"].keys()) == {"q0"}
+        assert options["barrier_factor"]["class"] == "BarrierFactor"
+
+        assert options["constant_threshold"]["parameters"] == {}
+        assert options["constant_threshold"]["class"] == "ConstantThreshold"
+
+    def test_r_is_no_longer_flattened_to_top_level(self):
+        """r/q0 must not leak into optimization_parameters directly - only inside the
+        threshold_behaviour options, since they belong to a swappable strategy, not the
+        lineshape itself."""
+        from decayshape.lineshapes import RelativisticBreitWigner
+
+        opt_params = RelativisticBreitWigner.to_json_schema()["optimization_parameters"]
+        assert "r" not in opt_params
+        assert "q0" not in opt_params
+
+    def test_default_reflects_each_lineshapes_own_default(self):
+        """Gaussian defaults threshold_behaviour to ConstantThreshold; RBW defaults to
+        BlattWeisskopfBarrier - the schema's "default" key must reflect the actual per-class
+        default, while "options" always lists all three regardless."""
+        from decayshape.lineshapes import Gaussian, RelativisticBreitWigner
+
+        rbw_threshold = RelativisticBreitWigner.to_json_schema()["optimization_parameters"]["threshold_behaviour"]
+        gaussian_threshold = Gaussian.to_json_schema()["optimization_parameters"]["threshold_behaviour"]
+
+        assert rbw_threshold["default"] == "blatt_weisskopf_barrier"
+        assert gaussian_threshold["default"] == "constant_threshold"
+        assert set(gaussian_threshold["options"].keys()) == set(rbw_threshold["options"].keys())
+
+    def test_unaffected_fields_stay_flat(self):
+        """Fields that were never part of threshold_behaviour (Flatte's r1/r2/q01/q02,
+        KMatrixAdvanced's channel_r) must be untouched by this change."""
+        from decayshape.kmatrix_advanced import KMatrixAdvanced
+        from decayshape.lineshapes import Flatte
+
+        flatte_params = Flatte.to_json_schema()["optimization_parameters"]
+        assert {"r1", "r2", "q01", "q02"}.issubset(flatte_params.keys())
+
+        kmatrix_params = KMatrixAdvanced.to_json_schema()["optimization_parameters"]
+        assert "channel_r" in kmatrix_params
+
+
 class TestJsonSchemaMixinInheritance:
     """Test that JsonSchemaMixin works correctly with inheritance."""
 
