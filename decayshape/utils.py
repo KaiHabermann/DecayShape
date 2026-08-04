@@ -7,7 +7,7 @@ commonly used in amplitude analysis.
 
 from typing import Any, Union
 
-from decayshape import config
+from .config import config
 
 
 def blatt_weiskopf_form_factor(q: Union[float, Any], r: float, L: int) -> Union[float, Any]:

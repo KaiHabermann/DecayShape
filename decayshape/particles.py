@@ -8,8 +8,8 @@ from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
-from .base import FixedParam, JsonSchemaMixin, Numerical
 from .config import config
+from .schema_base import FixedParam, JsonSchemaMixin, Numerical
 from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 

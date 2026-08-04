@@ -11,16 +11,11 @@ from typing import Any, Optional, Union
 
 from pydantic import Field, model_validator
 
-from decayshape import config
-
-from .base import FixedParam, Lineshape
+from .base import AnyThresholdFunction, FixedParam, Lineshape
+from .config import config
 from .particles import Channel, _make_channel_override
-from .utils import (
-    angular_momentum_barrier_factor,
-    blatt_weiskopf_form_factor,
-    mass_dependent_width,
-    relativistic_breit_wigner_denominator,
-)
+from .threshold import ConstantThreshold
+from .utils import mass_dependent_width, relativistic_breit_wigner_denominator
 
 
 class RelativisticBreitWigner(Lineshape):
@@ -32,12 +27,11 @@ class RelativisticBreitWigner(Lineshape):
 
     Supports multiple decay channels contributing to the total width. The first
     ("outer") channel in ``channels`` is the one the resonance is observed decaying
-    to: its momentum is used for the Blatt-Weiskopf form factor F, the angular
-    momentum barrier factor B, and its own contribution to the mass-dependent width,
-    all evaluated with the angular-momentum argument provided at call time - exactly
-    matching the single-channel behaviour of this class before multi-channel support
-    was added. Its daughter masses default to the first channel's masses but can be
-    overridden at call time via ``d1_mass``/``d2_mass``.
+    to: its momentum feeds the outer barrier factor (``threshold_behaviour``) and its
+    own contribution to the mass-dependent width, all evaluated with the angular-momentum
+    argument provided at call time - exactly matching the single-channel behaviour of
+    this class before multi-channel support was added. Its daughter masses default to
+    the first channel's masses but can be overridden at call time via ``d1_mass``/``d2_mass``.
 
     Any additional channels (index 1+) contribute their own branching-fraction-weighted
     mass-dependent width, each evaluated with that channel's own angular momentum
@@ -56,7 +50,7 @@ class RelativisticBreitWigner(Lineshape):
         description=(
             "Decay channels contributing to the mass-dependent width. Must contain at least one channel. "
             "The first ('outer') channel's masses and angular momentum (from the call-time argument) are "
-            "also used to build the outer Blatt-Weiskopf form factor and barrier factor."
+            "also used to evaluate the outer barrier factor (threshold_behaviour)."
         ),
     )
     branching_fractions: FixedParam[list[float]] = Field(
@@ -71,9 +65,19 @@ class RelativisticBreitWigner(Lineshape):
     # Optimization parameters
     pole_mass: float = Field(default=0.775, description="Pole mass of the resonance")
     width: float = Field(default=0.15, description="Resonance width")
-    r: float = Field(default=1.0, description="Hadron radius parameter for Blatt-Weiskopf form factor")
-    q0: Optional[float] = Field(
-        default=None, description="Reference momentum for the outer barrier factors (calculated from channels[0] if None)"
+    width_r: float = Field(
+        default=1.0,
+        description=(
+            "Hadron radius parameter for the mass-dependent width calculation. Independent of "
+            "threshold_behaviour's own radius, which only governs the outer barrier factor."
+        ),
+    )
+    width_q0: Optional[float] = Field(
+        default=None,
+        description=(
+            "Reference momentum for the mass-dependent width calculation (calculated from channels[0] if "
+            "None). Independent of threshold_behaviour's own reference momentum."
+        ),
     )
 
     @model_validator(mode="before")
@@ -120,11 +124,11 @@ class RelativisticBreitWigner(Lineshape):
         return self
 
     @property
-    def parameter_order(self) -> list[str]:
-        """Return the order of parameters for positional arguments."""
-        params = ["pole_mass", "width", "r"]
-        if self.q0 is not None:
-            params.append("q0")
+    def _own_parameter_order(self) -> list[str]:
+        """Return the order of this lineshape's own parameters for positional arguments."""
+        params = ["pole_mass", "width", "width_r"]
+        if self.width_q0 is not None:
+            params.append("width_q0")
         return params
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
@@ -135,7 +139,7 @@ class RelativisticBreitWigner(Lineshape):
             angular_momentum: Angular momentum parameter (doubled values: 0, 2, 4, ...)
             spin: Spin parameter (doubled values: 1, 3, 5, ...)
             s: Mandelstam variable s (mass squared) or array of s values
-            *args: Positional parameter overrides (width, r, q0)
+            *args: Positional parameter overrides (width, width_r, width_q0)
             **kwargs: Keyword parameter overrides
 
         Returns:
@@ -148,45 +152,44 @@ class RelativisticBreitWigner(Lineshape):
         # Get parameters with overrides
         params = self._get_parameters(*args, **kwargs)
 
-        if params["q0"] is None:
-            params["q0"] = channel.momentum(params["pole_mass"] ** 2)
+        if params["width_q0"] is None:
+            params["width_q0"] = channel.momentum(params["pole_mass"] ** 2)
 
         # Calculate momentum in the decay frame using the outer channel's masses
         q = channel.momentum(s)
 
         # Convert doubled angular momentum to actual L value. This L describes the outer
-        # (first) channel's decay, so it is used for F, B, and that channel's own width
-        # contribution below - matching the pre-multi-channel single-channel behaviour exactly.
+        # (first) channel's decay, so it is used for the outer barrier and that channel's
+        # own width contribution below - matching the pre-multi-channel single-channel
+        # behaviour exactly.
         L = angular_momentum // 2
 
-        # Blatt-Weiskopf form factor (outer barrier)
-        F = blatt_weiskopf_form_factor(q, params["r"], L)
-
-        # Angular momentum barrier factor (outer barrier)
-        B = angular_momentum_barrier_factor(q, params["q0"], L)
+        # Outer barrier factor, delegated to the configured threshold behaviour. Independent
+        # of width_r/width_q0 below - see class docstring/width_r field description.
+        barrier = self.threshold_behaviour(q, channel, L, s0=params["pole_mass"] ** 2, **self._threshold_kwargs(params))
 
         # Mass-dependent width: branching-fraction-weighted sum over all width channels.
-        # The outer (first) channel reuses q, q0 and L computed above (including any
+        # The outer (first) channel reuses q, width_q0 and L computed above (including any
         # d1_mass/d2_mass override), so a single-channel instance reproduces the old
         # single-channel result exactly. Any additional channels use their own momentum,
         # own q0, and their own angular momentum (Channel.l), since the call-time L only
         # describes the outer channel's decay.
         branching_fractions = self.branching_fractions.value
         gamma_s = branching_fractions[0] * mass_dependent_width(
-            q, s, params["q0"], params["pole_mass"], params["width"], L, params["r"]
+            q, s, params["width_q0"], params["pole_mass"], params["width"], L, params["width_r"]
         )
         for width_channel, branching_fraction in zip(self.channels.value[1:], branching_fractions[1:]):
             width_channel_L = width_channel.l.value // 2
             q_channel = width_channel.momentum(s)
             q0_channel = width_channel.momentum(params["pole_mass"] ** 2)
             gamma_s = gamma_s + branching_fraction * mass_dependent_width(
-                q_channel, s, q0_channel, params["pole_mass"], params["width"], width_channel_L, params["r"]
+                q_channel, s, q0_channel, params["pole_mass"], params["width"], width_channel_L, params["width_r"]
             )
 
         # Breit-Wigner denominator (use optimization parameter pole_mass)
         denominator = relativistic_breit_wigner_denominator(s, params["pole_mass"], gamma_s)
 
-        return F * B / denominator
+        return barrier / denominator
 
     def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         # Resolve s: prefer call-time s, else field value
@@ -244,15 +247,27 @@ class GounarisSakurai(Lineshape):
     omega_width: float = Field(default=8.49, description="Omega width or width of interfering particle")
     delta_mag: float = Field(default=0.0002, description="Magnitude of interfering particle")
     delta_phi: float = Field(default=1.65, description="Phase of interfering particle in radians")
-    q0: Optional[float] = Field(default=None, description="Reference momentum (calculated from channel if None)")
-    r: float = Field(default=1.0, description="Hadron radius parameter for Blatt-Weiskopf form factor")
+    width_r: float = Field(
+        default=1.0,
+        description=(
+            "Hadron radius parameter for the mass-dependent width/dispersive-correction calculation. "
+            "Independent of threshold_behaviour's own radius, which only governs the outer barrier factor."
+        ),
+    )
+    width_q0: Optional[float] = Field(
+        default=None,
+        description=(
+            "Reference momentum for the mass-dependent width/dispersive-correction calculation (calculated "
+            "from channel if None). Independent of threshold_behaviour's own reference momentum."
+        ),
+    )
 
     @property
-    def parameter_order(self) -> list[str]:
-        """Return the order of parameters for positional arguments."""
-        params = ["pole_mass", "width", "omega_mass", "omega_width", "delta_mag", "delta_phi", "r"]
-        if self.q0 is not None:
-            params.append("q0")
+    def _own_parameter_order(self) -> list[str]:
+        """Return the order of this lineshape's own parameters for positional arguments."""
+        params = ["pole_mass", "width", "omega_mass", "omega_width", "delta_mag", "delta_phi", "width_r"]
+        if self.width_q0 is not None:
+            params.append("width_q0")
         return params
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
@@ -263,7 +278,7 @@ class GounarisSakurai(Lineshape):
             angular_momentum: Angular momentum parameter (usually 2 for P-wave)
             spin: Spin parameter (usually 2 for rho)
             s: Mandelstam variable s (mass squared) or array of s values
-            *args: Positional parameter overrides (pole_mass, width, q0)
+            *args: Positional parameter overrides (pole_mass, width, width_r, width_q0)
             **kwargs: Keyword parameter overrides
 
         Returns:
@@ -286,11 +301,11 @@ class GounarisSakurai(Lineshape):
         # Calculate derived quantities
         m0_sq = m0**2
 
-        # If q0 is not provided, calculate it at pole mass
-        if params["q0"] is None:
-            params["q0"] = channel.momentum(m0_sq)
+        # If width_q0 is not provided, calculate it at pole mass
+        if params["width_q0"] is None:
+            params["width_q0"] = channel.momentum(m0_sq)
 
-        q0 = params["q0"]
+        q0 = params["width_q0"]
         q = channel.momentum(s_val)
 
         # Get backend
@@ -303,7 +318,7 @@ class GounarisSakurai(Lineshape):
         # correction terms to the mass
         m = np.sqrt(s_val)
 
-        gamma_s = mass_dependent_width(q, s_val, q0, m0, gamma0, L, params["r"])
+        gamma_s = mass_dependent_width(q, s_val, q0, m0, gamma0, L, params["width_r"])
 
         def h(m):
             return 2 / np.pi * channel.momentum(m**2) / m * np.log((m + q) / (2 * m_pi))
@@ -316,18 +331,17 @@ class GounarisSakurai(Lineshape):
         m2_corr = m0_sq + f_val
         denominator = m2_corr - 1j * m * gamma_s - s
 
-        F = blatt_weiskopf_form_factor(q, params["r"], L)
-        B = angular_momentum_barrier_factor(q, params["q0"], L)
+        barrier = self.threshold_behaviour(q, channel, L, s0=m0_sq, **self._threshold_kwargs(params))
 
         # Rho-Omega Interference
         delta = delta_mag * np.exp(1j * delta_phi)
         # Omega width also follows L=1 barrier scaling
         q_om = channel.momentum(omega_mass**2)
-        gamma_om_s = mass_dependent_width(q, s_val, q_om, omega_mass, omega_width, L, params["r"])
+        gamma_om_s = mass_dependent_width(q, s_val, q_om, omega_mass, omega_width, L, params["width_r"])
 
         omega_term = (1 + delta * s / (omega_mass**2 - s - 1j * m * gamma_om_s)) / (1 + delta)
 
-        return (F * B / denominator) * omega_term
+        return (barrier / denominator) * omega_term
 
     def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
@@ -360,8 +374,8 @@ class Flatte(Lineshape):
     q02: Optional[float] = Field(default=None, description="Reference momentum for second channel")
 
     @property
-    def parameter_order(self) -> list[str]:
-        """Return the order of parameters for positional arguments."""
+    def _own_parameter_order(self) -> list[str]:
+        """Return the order of this lineshape's own parameters for positional arguments."""
         params = ["pole_mass", "width1", "width2", "r1", "r2"]
         if self.q01 is not None:
             params.append("q01")
@@ -404,12 +418,6 @@ class Flatte(Lineshape):
         # Convert doubled angular momentum to actual L value
         L = angular_momentum // 2
 
-        # Form factors and barrier factors for both channels
-        blatt_weiskopf_form_factor(q1, params["r1"], L)
-        blatt_weiskopf_form_factor(q2, params["r2"], L)
-        angular_momentum_barrier_factor(q1, params["q01"], L)
-        angular_momentum_barrier_factor(q2, params["q02"], L)
-
         gamma1 = mass_dependent_width(q1, s, params["q01"], params["pole_mass"], params["width1"], L, params["r1"])
         gamma2 = mass_dependent_width(q2, s, params["q02"], params["pole_mass"], params["width2"], L, params["r2"])
 
@@ -418,10 +426,16 @@ class Flatte(Lineshape):
         # Flatté denominator (use optimization parameter pole_mass)
         denominator = params["pole_mass"] ** 2 - s - 1j * params["pole_mass"] * total_width
 
+        # Outer barrier factor, delegated to the configured threshold behaviour and
+        # evaluated on channel1 (the channel that supports the d1_mass/d2_mass override).
+        # r1/r2/q01/q02 above are independent, per-channel width parameters and are not
+        # part of this outer barrier.
+        barrier = self.threshold_behaviour(q1, channel1, L, s0=params["pole_mass"] ** 2, **self._threshold_kwargs(params))
+
         numerator = params["pole_mass"] * mass_dependent_width(
             q1, s, params["q01"], params["pole_mass"], gamma1, L, params["r1"]
         )
-        return numerator / denominator
+        return barrier * numerator / denominator
 
     def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
@@ -445,9 +459,14 @@ class Gaussian(Lineshape):
     mean: float = Field(default=0.0, description="Mean of the Gaussian")
     width: float = Field(default=1.0, description="Width (standard deviation) of the Gaussian")
 
+    threshold_behaviour: AnyThresholdFunction = Field(
+        default_factory=ConstantThreshold,
+        description="No channel to build a barrier factor from, so this is inert by default",
+    )
+
     @property
-    def parameter_order(self) -> list[str]:
-        """Return the order of parameters for positional arguments."""
+    def _own_parameter_order(self) -> list[str]:
+        """Return the order of this lineshape's own parameters for positional arguments."""
         return ["mean", "width"]
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
@@ -501,9 +520,14 @@ class Exponential(Lineshape):
 
     slope: float = Field(default=1.0, description="Exponential slope in mass")
 
+    threshold_behaviour: AnyThresholdFunction = Field(
+        default_factory=ConstantThreshold,
+        description="No channel to build a barrier factor from, so this is inert by default",
+    )
+
     @property
-    def parameter_order(self) -> list[str]:
-        """Return the order of parameters for positional arguments."""
+    def _own_parameter_order(self) -> list[str]:
+        """Return the order of this lineshape's own parameters for positional arguments."""
         return ["slope"]
 
     def function(self, angular_momentum, spin, s, *args, **kwargs) -> Union[float, Any]:
@@ -560,19 +584,24 @@ class InterpolationBase(Lineshape):
         description="Amplitude values at the mass points. Leave empty to use default values. Otherwise, provide the amplitude values in the order of the mass points (n_amplitudes = n_mass_points or n_amplitudes = 2 * n_mass_points for complex interpolation).",
     )
 
+    threshold_behaviour: AnyThresholdFunction = Field(
+        default_factory=ConstantThreshold,
+        description="No channel to build a barrier factor from, so this is inert by default",
+    )
+
     def _get_parameters(self, *args, **kwargs) -> dict[str, Any]:
         """Get parameters with overrides from call arguments."""
         args, kwargs = self._parse_args_and_kwargs(args, kwargs)
         params = {
             "amplitudes": [],
         }
-        for name, default_value in zip(self.parameter_order, self.amplitudes):
+        for name, default_value in zip(self._own_parameter_order, self.amplitudes):
             params["amplitudes"].append(kwargs.get(name, default_value))
         return params
 
     @property
-    def parameter_order(self) -> list[str]:
-        """Return the order of parameters for positional arguments."""
+    def _own_parameter_order(self) -> list[str]:
+        """Return the order of this lineshape's own parameters for positional arguments."""
         if self.complex.value:
             # For complex interpolation, we have real and imaginary parts
             param_names = []

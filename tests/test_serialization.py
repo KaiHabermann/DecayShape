@@ -9,6 +9,7 @@ import pytest
 
 from decayshape import Flatte, KMatrixAdvanced, RelativisticBreitWigner
 from decayshape.particles import Channel, CommonParticles
+from decayshape.threshold import BlattWeisskopfBarrier
 
 
 class TestRelativisticBreitWignerSerialization:
@@ -16,7 +17,9 @@ class TestRelativisticBreitWignerSerialization:
         s_vals = np.linspace(0.5, 0.8, 5)
         # Create a channel (rho -> pi+ pi-)
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        bw = RelativisticBreitWigner(s=s_vals, channels=[pipi_channel], pole_mass=0.775, width=0.15, r=1.0)
+        bw = RelativisticBreitWigner(
+            s=s_vals, channels=[pipi_channel], pole_mass=0.775, width=0.15, threshold_behaviour=BlattWeisskopfBarrier(r=1.0)
+        )
 
         data = bw.model_dump()
         assert isinstance(data, dict)

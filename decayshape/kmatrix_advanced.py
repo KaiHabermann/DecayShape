@@ -10,11 +10,9 @@ from typing import Any, Optional, Union
 
 from pydantic import Field, model_validator
 
-from decayshape import config
-
 from .base import FixedParam, Lineshape
+from .config import config
 from .particles import Channel, _make_channel_override
-from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 
 class KMatrixAdvanced(Lineshape):
@@ -39,13 +37,18 @@ class KMatrixAdvanced(Lineshape):
     decay_couplings: list[float] = Field(
         default_factory=list, description="Decay couplings from each pole to each channel (length = n_poles × n_channels)"
     )
-    r: float = Field(default=1.0, description="Hadron radius parameter")
+    channel_r: float = Field(
+        default=1.0,
+        description=(
+            "Hadron radius parameter shared by all channels' internal K-matrix factors. Independent of "
+            "threshold_behaviour's own radius, which only governs the output channel's outer barrier factor."
+        ),
+    )
 
     background: Optional[list[float]] = Field(default=None, description="Background terms. Length = n_poles x n_channels")
     production_background: Optional[list[float]] = Field(
         default=None, description="Production background terms. Length = n_channels"
     )
-    q0: Optional[float] = Field(default=None, description="Reference momentum")
 
     class Config:
         arbitrary_types_allowed = True
@@ -83,8 +86,8 @@ class KMatrixAdvanced(Lineshape):
         return self
 
     @property
-    def parameter_order(self) -> list[str]:
-        """Return the order of parameters for positional arguments."""
+    def _own_parameter_order(self) -> list[str]:
+        """Return the order of this lineshape's own parameters for positional arguments."""
         n_poles = len(self.pole_masses)
         n_channels = len(self.channels.value)
 
@@ -115,10 +118,7 @@ class KMatrixAdvanced(Lineshape):
             for channel_idx in range(n_channels):
                 params.append(f"production_background_{channel_idx}")
 
-        # Add other parameters
-        params.extend(["r"])
-        if self.q0 is not None:
-            params.append("q0")
+        params.append("channel_r")
 
         return params
 
@@ -190,8 +190,9 @@ class KMatrixAdvanced(Lineshape):
                     production_background.append(self.production_background[channel_idx])
             params["production_background"] = production_background
 
-        # Handle other parameters
-        for param_name in ["r", "q0"]:
+        # Handle other parameters: channel_r is this lineshape's own field; r/q0 (if present)
+        # come from threshold_behaviour and only govern the output channel's outer barrier.
+        for param_name in ["channel_r", "r", "q0"]:
             if param_name in kwargs:
                 params[param_name] = kwargs[param_name]
 
@@ -239,9 +240,10 @@ class KMatrixAdvanced(Lineshape):
             for channel_idx in range(n_channels):
                 param_dict[f"production_background_{channel_idx}"] = self.production_background[channel_idx]
 
-        # Add other parameters
-        param_dict["r"] = self.r
-        param_dict["q0"] = self.q0
+        param_dict["channel_r"] = self.channel_r
+
+        # Add the parameters contributed by threshold_behaviour (e.g. r, q0)
+        param_dict.update(self.threshold_behaviour.get_parameters())
 
         return param_dict
 
@@ -279,19 +281,17 @@ class KMatrixAdvanced(Lineshape):
         output_idx = self.output_channel.value
         # The norm value for s
         s_0 = config.backend.mean(config.backend.array(params["pole_masses"])) ** 2
-        if params["q0"] is None:
-            params["q0"] = channels[output_idx].momentum(s_0)
 
         # Step 3: Build the F-vector
-        A = self._build_amplitude(K_matrix, P_vector, s, n_channels, s_0, params["r"], channels=channels)
+        A = self._build_amplitude(K_matrix, P_vector, s, n_channels, s_0, params["channel_r"], channels=channels)
 
         # Step 4: Return the specified channel of the F-vector
 
-        # Compute angular momentum barrier factor
+        # Compute the outer barrier factor, delegated to the configured threshold behaviour
         q = channels[output_idx].momentum(s)
         L = angular_momentum // 2
 
-        B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["r"], L)
+        B = self.threshold_behaviour(q, channels[output_idx], L, s0=s_0, **self._threshold_kwargs(params))
 
         if n_channels == 1:
             # Single channel: F_vector is already 1D
