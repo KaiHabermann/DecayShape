@@ -78,6 +78,8 @@ def get_lineshape_schema(lineshape_name: str, **kwargs) -> dict[str, Any]:
     s_vals = np.array([0.5, 0.6, 0.7])
 
     if lineshape_name == "RelativisticBreitWigner":
+        if "channels" not in kwargs:
+            kwargs["channels"] = [Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)]
         defaults = {"pole_mass": 0.775, "width": 0.15}
         defaults.update(kwargs)
         lineshape = RelativisticBreitWigner(s=s_vals, **defaults)

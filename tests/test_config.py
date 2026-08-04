@@ -78,7 +78,7 @@ class TestBackendSwitching:
         from decayshape.particles import Channel, CommonParticles
 
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_vals, width=0.15)
+        bw = RelativisticBreitWigner(channels=[pipi_channel], pole_mass=0.775, s=s_vals, width=0.15)
 
         # Backend should still be numpy
         assert config.backend_name == "numpy"
@@ -154,7 +154,7 @@ class TestBackendCompatibility:
         from decayshape.particles import Channel, CommonParticles
 
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        bw = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_vals, width=0.15)
+        bw = RelativisticBreitWigner(channels=[pipi_channel], pole_mass=0.775, s=s_vals, width=0.15)
 
         result = bw(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
@@ -194,7 +194,7 @@ class TestBackendCompatibility:
         from decayshape.particles import Channel, CommonParticles
 
         pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
-        bw_numpy = RelativisticBreitWigner(channel=pipi_channel, pole_mass=0.775, s=s_vals, width=0.15)
+        bw_numpy = RelativisticBreitWigner(channels=[pipi_channel], pole_mass=0.775, s=s_vals, width=0.15)
         result_numpy = bw_numpy(1, 2)  # spin=1 (1/2), angular_momentum=2 (L=1)
 
         # Results should be numpy arrays
