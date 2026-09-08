@@ -20,6 +20,7 @@ from .utils import (
     blatt_weiskopf_form_factor,
     mass_dependent_width,
     relativistic_breit_wigner_denominator,
+    relativistic_breit_wigner_normalization,
 )
 
 
@@ -159,8 +160,12 @@ class RelativisticBreitWigner(Lineshape):
         # contribution below - matching the pre-multi-channel single-channel behaviour exactly.
         L = angular_momentum // 2
 
-        # Blatt-Weiskopf form factor (outer barrier)
-        F = blatt_weiskopf_form_factor(q, params["r"], L)
+        # Blatt-Weiskopf form factor (outer barrier), normalized to its value at the pole (q0)
+        # so that F == 1 at s = pole_mass**2 - consistent with the width's F(q)/F(q0) ratio
+        # below, and with B (which is already 1 at the pole by construction). Without this,
+        # the raw (un-normalized) form factor grows with pole_mass/r and leaks into the overall
+        # amplitude scale instead of just shaping it away from the pole.
+        F = blatt_weiskopf_form_factor(q, params["r"], L) / blatt_weiskopf_form_factor(params["q0"], params["r"], L)
 
         # Angular momentum barrier factor (outer barrier)
         B = angular_momentum_barrier_factor(q, params["q0"], L)
@@ -186,7 +191,11 @@ class RelativisticBreitWigner(Lineshape):
         # Breit-Wigner denominator (use optimization parameter pole_mass)
         denominator = relativistic_breit_wigner_denominator(s, params["pole_mass"], gamma_s)
 
-        return F * B / denominator
+        # Normalize so that the integral of |amplitude|^2 over sqrt(s) is independent of
+        # pole_mass and width (see relativistic_breit_wigner_normalization docstring).
+        normalization = relativistic_breit_wigner_normalization(params["pole_mass"], params["width"])
+
+        return (F * B / denominator) * normalization**0.5
 
     def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         # Resolve s: prefer call-time s, else field value

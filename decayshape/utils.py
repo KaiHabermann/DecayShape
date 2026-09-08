@@ -110,6 +110,28 @@ def relativistic_breit_wigner_denominator(s: Union[float, Any], mass: float, wid
     return s - mass**2 + 1j * mass * width
 
 
+def relativistic_breit_wigner_normalization(mass: float, width: float) -> Union[float, Any]:
+    """
+    Normalization constant for a relativistic Breit-Wigner amplitude.
+
+    Chosen so that the corresponding intensity, N / [(s - mass^2)^2 + mass^2 * width^2],
+    integrates to unity over the center-of-mass energy sqrt(s), matching the normalized
+    relativistic Breit-Wigner distribution:
+    https://en.wikipedia.org/wiki/Relativistic_Breit%E2%80%93Wigner_distribution
+
+    Args:
+        mass: Resonance (pole) mass
+        width: Resonance (nominal) width
+
+    Returns:
+        Normalization constant N
+    """
+    np = config.backend
+
+    gamma = np.sqrt(mass**2 * (mass**2 + width**2))
+    return (2 * np.sqrt(2) * mass * width * gamma) / (np.pi * np.sqrt(mass**2 + gamma))
+
+
 def two_body_breakup_momentum(s: Union[float, Any], m1: float, m2: float) -> Union[float, Any]:
     """
     Calculate the two-body breakup momentum in the center-of-mass frame.
