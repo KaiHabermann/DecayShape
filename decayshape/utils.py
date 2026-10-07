@@ -31,13 +31,13 @@ def blatt_weiskopf_form_factor(q: Union[float, Any], r: float, L: int) -> Union[
     if L == 0:
         return np.ones_like(q)
     elif L == 1:
-        return np.sqrt(1 + x**2)
+        return 1 / np.sqrt(1 + x**2)
     elif L == 2:
-        return np.sqrt(9 + 3 * x**2 + x**4)
+        return 1 / np.sqrt(9 + 3 * x**2 + x**4)
     elif L == 3:
-        return np.sqrt(225 + 45 * x**2 + 6 * x**4 + x**6)
+        return 1 / np.sqrt(225 + 45 * x**2 + 6 * x**4 + x**6)
     elif L == 4:
-        return np.sqrt(11025 + 1575 * x**2 + 135 * x**4 + 10 * x**6 + x**8)
+        return 1 / np.sqrt(11025 + 1575 * x**2 + 135 * x**4 + 10 * x**6 + x**8)
     else:
         raise ValueError(f"Blatt-Weiskopf form factor not implemented for L={L}")
 

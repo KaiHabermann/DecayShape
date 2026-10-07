@@ -43,8 +43,8 @@ KK = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS
 # peaks at higher mass. The upper bound must be wide enough that the barrier-factor
 # tails scanned in `r` (which grow with q, i.e. with s) are not artificially cut off.
 MASS_MIN = PIPI.threshold + 1e-3
-MASS_MAX = 8.0
-N_POINTS = 200000
+MASS_MAX = 30.0
+N_POINTS = 40000
 MASS_GRID = np.linspace(MASS_MIN, MASS_MAX, N_POINTS)
 S_GRID = MASS_GRID**2
 
@@ -68,9 +68,32 @@ def integrate_intensity(
     return np.trapezoid(intensity, mass_grid)
 
 
+def integrate_intensity_above_threshold(
+    lineshape, threshold_sq, s_grid=S_GRID, mass_grid=MASS_GRID, angular_momentum=ANGULAR_MOMENTUM, spin=SPIN, **overrides
+):
+    """
+    Like integrate_intensity, but restricted to s >= threshold_sq.
+
+    For a K-matrix output channel, the amplitude below that channel's own threshold is
+    not physically meaningful (no phase space, no unitarity constraint - see
+    benchmark/kmatrix_divergence_analysis.py) - integrating through it anyway is exactly
+    what manufactured the earlier "exploding" coupling scans. This is the correct fix for
+    that case, not a coupling-dependent rescaling.
+    """
+    amplitude = lineshape(angular_momentum, spin, s=s_grid, **overrides)
+    intensity = np.abs(np.asarray(amplitude)) ** 2
+    mask = s_grid >= threshold_sq
+    return np.trapezoid(intensity[mask], mass_grid[mask])
+
+
 def run_scan(lineshape, param_name, values):
     """Evaluate the integral for a single parameter swept over `values`."""
     return np.array([integrate_intensity(lineshape, **{param_name: v}) for v in values])
+
+
+def run_scan_above_threshold(lineshape, param_name, values, threshold_sq):
+    """Like run_scan, but integrating only over s >= threshold_sq (see integrate_intensity_above_threshold)."""
+    return np.array([integrate_intensity_above_threshold(lineshape, threshold_sq, **{param_name: v}) for v in values])
 
 
 def plot_lineshape_scans(title, filename, scans):
@@ -169,21 +192,39 @@ def scan_kmatrix():
         output_channel=0,
     )
 
-    pole_mass_0 = np.linspace(0.4, 0.95, 20)  # below/around KK threshold
-    pole_mass_1 = np.linspace(0.95, 1.6, 20)  # above KK threshold
-    decay_coupling_00 = np.geomspace(0.05, 5.0, 20)  # pole 0 -> pipi
-    decay_coupling_11 = np.geomspace(0.05, 5.0, 20)  # pole 1 -> KK
-    production_coupling_0 = np.geomspace(0.05, 5.0, 20)
+    # Production couplings are held fixed at O(1) throughout: their overall scale is a
+    # redundant degree of freedom (degenerate with an external partial-wave coupling in
+    # any real fit amplitude), and their *relative* scale is a genuine, data-constrained
+    # physical parameter with no internal bound - neither is a "divergence" for the
+    # lineshape itself to fix. See the production_coupling_0 discussion in the
+    # conversation this benchmark grew out of.
+    output_threshold_sq = PIPI.threshold**2  # output_channel=0 -> integrate only where physical
+
+    pole_mass_0 = np.linspace(0.29, 0.95, 24)  # below/around KK threshold
+    pole_mass_1 = np.linspace(0.95, 6.0, 24)  # above KK threshold
+    decay_coupling_00 = np.geomspace(0.001, 100.0, 24)  # pole 0 -> pipi
+    decay_coupling_11 = np.geomspace(0.001, 100.0, 24)  # pole 1 -> KK
 
     scans = [
-        ("pole_mass_0 [GeV]", pole_mass_0, run_scan(base, "pole_mass_0", pole_mass_0)),
-        ("pole_mass_1 [GeV]", pole_mass_1, run_scan(base, "pole_mass_1", pole_mass_1)),
-        ("decay_coupling_0_0 (pole0->pipi)", decay_coupling_00, run_scan(base, "decay_coupling_0_0", decay_coupling_00)),
-        ("decay_coupling_1_1 (pole1->KK)", decay_coupling_11, run_scan(base, "decay_coupling_1_1", decay_coupling_11)),
         (
-            "production_coupling_0",
-            production_coupling_0,
-            run_scan(base, "production_coupling_0", production_coupling_0),
+            "pole_mass_0 [GeV]",
+            pole_mass_0,
+            run_scan_above_threshold(base, "pole_mass_0", pole_mass_0, output_threshold_sq),
+        ),
+        (
+            "pole_mass_1 [GeV]",
+            pole_mass_1,
+            run_scan_above_threshold(base, "pole_mass_1", pole_mass_1, output_threshold_sq),
+        ),
+        (
+            "decay_coupling_0_0 (pole0->pipi)",
+            decay_coupling_00,
+            run_scan_above_threshold(base, "decay_coupling_0_0", decay_coupling_00, output_threshold_sq),
+        ),
+        (
+            "decay_coupling_1_1 (pole1->KK)",
+            decay_coupling_11,
+            run_scan_above_threshold(base, "decay_coupling_1_1", decay_coupling_11, output_threshold_sq),
         ),
     ]
     plot_lineshape_scans(

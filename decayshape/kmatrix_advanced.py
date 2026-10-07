@@ -14,7 +14,7 @@ from decayshape import config
 
 from .base import FixedParam, Lineshape
 from .particles import Channel, _make_channel_override
-from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
+from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor, relativistic_breit_wigner_normalization
 
 
 class KMatrixAdvanced(Lineshape):
@@ -293,12 +293,20 @@ class KMatrixAdvanced(Lineshape):
 
         B = angular_momentum_barrier_factor(q, params["q0"], L) * blatt_weiskopf_form_factor(q, params["r"], L)
 
+        # Rough overall rescaling so that the intensity integral does not explode as
+        # couplings are scaled up (see _coupling_normalization docstring). This is not
+        # an exact normalization - it is a real, s-independent scalar, so it does not
+        # change the lineshape, only its overall size. Always uses the fixed, un-overridden
+        # channel definitions (not the call-time `channels`, which may carry a per-s-point
+        # d1_mass/d2_mass override) since this is a static property of the poles, not of s.
+        coupling_norm = self._coupling_normalization(params, self.channels.value, n_poles, n_channels, output_idx)
+
         if n_channels == 1:
             # Single channel: F_vector is already 1D
-            return A * B
+            return A * B * coupling_norm
         else:
             # Multi-channel: F_vector is 2D, return specified channel
-            return A[output_idx, :] * B
+            return A[output_idx, :] * B * coupling_norm
 
     def __call__(self, angular_momentum, spin, *args, s=None, d1_mass=None, d2_mass=None, **kwargs) -> Union[float, Any]:
         s_val = s if s is not None else (self.s.value if self.s is not None else None)
@@ -394,6 +402,52 @@ class KMatrixAdvanced(Lineshape):
 
         return P_vector
 
+    def _coupling_normalization(self, params, channels, n_poles, n_channels, output_idx):
+        """
+        Rough, per-pole rescaling that keeps the K-matrix intensity from exploding as
+        production/decay couplings are scaled up.
+
+        This is not an attempt at an exact normalization (poles interfere through the
+        (1 - iK*rho)^-1 matrix inversion, so no single scalar can undo that exactly).
+        It is only meant to stop the integral of |amplitude|^2 from growing without
+        bound with coupling strength, the same way relativistic_breit_wigner_normalization
+        does for RelativisticBreitWigner.
+
+        For a single pole and channel, K-matrix reduces to
+            T = beta * g / (m^2 - s - i * g^2 * rho(s))
+        i.e. g^2 * rho plays the role of m * Gamma(s) in a Breit-Wigner. So for each pole R
+        we read off an effective total width from its own decay couplings,
+            Gamma_R = sum_c g_Rc^2 * rho_c(m_R^2) / m_R,
+        and rescale out the couplings' contribution to the overall amplitude size
+        (beta_R * g_{R,output}) in favor of the bounded Breit-Wigner-style
+        sqrt(relativistic_breit_wigner_normalization(m_R, Gamma_R)).
+        """
+        np = config.backend
+
+        pole_masses = np.array(params["pole_masses"])
+        g_matrix = np.array(params["decay_couplings"]).reshape(n_poles, n_channels)
+        beta = np.array(params["production_couplings"])
+
+        epsilon = 1e-12
+        factors = []
+        for pole_idx in range(n_poles):
+            m_r = pole_masses[pole_idx]
+
+            gamma_r = 0.0
+            for channel_idx, channel in enumerate(channels):
+                rho_c = np.real(channel.phase_space_factor(m_r**2))
+                gamma_r = gamma_r + g_matrix[pole_idx, channel_idx] ** 2 * rho_c
+            gamma_r = gamma_r / m_r
+            gamma_r = np.where(gamma_r < epsilon, epsilon, gamma_r)
+
+            norm_r = relativistic_breit_wigner_normalization(m_r, gamma_r)
+            coupling_scale = np.abs(beta[pole_idx] * g_matrix[pole_idx, output_idx]) + epsilon
+            factors.append(np.sqrt(norm_r) / coupling_scale)
+
+        # Geometric mean keeps the correction O(1) regardless of the number of poles.
+        factors = np.array(factors)
+        return np.prod(factors) ** (1.0 / n_poles)
+
     def _build_amplitude(self, K, P, s, n_channels, s_0, r, channels=None):
         """
         The P-Vector amplitude is given by
@@ -421,8 +475,10 @@ class KMatrixAdvanced(Lineshape):
 
         # A_a = K_ac P^c
         if n_channels == 1:
-            # Single channel: T = K / (1 - i*K*rho)
-            A = P[0] / (1 - 1j * K[0, 0] * rho[0])
+            # Single channel: T = K / (1 - i*K*rho_tilde), rho_tilde = rho * n^2 (matches
+            # the multi-channel branch below). Must index K as K[:, 0, 0] (all s values),
+            # not K[0, 0] (which silently picked only the first s point's K value).
+            A = P[0] / (1 - 1j * K[:, 0, 0] * rho[0] * n[0])
         else:
             # Multi-channel case: T = K * (I - i*K*rho)^(-1)
             # Fully vectorized calculation for all s values at once

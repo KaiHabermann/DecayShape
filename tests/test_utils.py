@@ -29,8 +29,10 @@ class TestBlattWeiskopfFormFactor:
 
         F = blatt_weiskopf_form_factor(q, r, L=1)
 
-        # P-wave formula: sqrt((1 + x^2) / (1 + x^2))
-        expected = np.sqrt(1 + (q * r) ** 2)
+        # P-wave formula: 1/sqrt(1 + x^2). This decreases with q, matching the standard
+        # Blatt-Weisskopf convention where the form factor damps high-momentum
+        # contributions rather than amplifying them.
+        expected = 1 / np.sqrt(1 + (q * r) ** 2)
         np.testing.assert_array_almost_equal(F, expected)
 
     def test_d_wave_form_factor(self):

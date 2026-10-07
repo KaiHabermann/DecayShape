@@ -254,7 +254,11 @@ class TestKMatrixPhysics:
             channels=[pipi_channel],
             pole_masses=[pole_mass],
             production_couplings=[1.0],
-            decay_couplings=[1.0],
+            # A coupling of order 1 makes this single pole so broad/overdamped by unitarity
+            # that the amplitude no longer peaks near the pole mass at all (there is no
+            # narrow-resonance regime at that coupling strength) - use a smaller, more
+            # realistic coupling so the pole actually manifests as a peak.
+            decay_couplings=[0.1],
             output_channel=0,
         )
 
