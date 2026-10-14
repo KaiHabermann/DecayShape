@@ -109,6 +109,14 @@ kmat = ds.KMatrixAdvanced(
 ampl = kmat()
 ```
 
+Optional `background` is the s-independent, real, symmetric K-matrix background b_ij of PDG Eq. 50.38,
+`K_ij = Σ_R g_Ri g_Rj / (m_R² − s) + b_ij`. It is given as the flat upper triangle (i ≤ j, row-major),
+length `n_channels * (n_channels + 1) / 2`, with parameter names `background_{i}_{j}`.
+
+> **Breaking change in 0.4.0:** `background` previously had length `n_poles * n_channels`
+> (`background_{pole}_{channel}`) and was added per pole, producing a non-symmetric K-matrix.
+> Existing configurations must be converted to the upper-triangle b_ij format.
+
 ## Backend Configuration
 
 The package supports both NumPy and JAX backends:

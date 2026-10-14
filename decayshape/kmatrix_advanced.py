@@ -17,6 +17,11 @@ from .particles import Channel, _make_channel_override
 from .utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 
+def _background_pairs(n_channels: int) -> list[tuple[int, int]]:
+    """Channel index pairs (i <= j, row-major) of the upper triangle of the K-matrix background b_ij."""
+    return [(i, j) for i in range(n_channels) for j in range(i, n_channels)]
+
+
 class KMatrixAdvanced(Lineshape):
     """
     Advanced K-matrix lineshape using poles and channels.
@@ -41,7 +46,12 @@ class KMatrixAdvanced(Lineshape):
     )
     r: float = Field(default=1.0, description="Hadron radius parameter")
 
-    background: Optional[list[float]] = Field(default=None, description="Background terms. Length = n_poles x n_channels")
+    background: Optional[list[float]] = Field(
+        default=None,
+        description=(
+            "upper triangle (i <= j, row-major) of the symmetric channel×channel K-matrix background b_ij, PDG Eq. 50.38"
+        ),
+    )
     production_background: Optional[list[float]] = Field(
         default=None, description="Production background terms. Length = n_channels"
     )
@@ -73,8 +83,12 @@ class KMatrixAdvanced(Lineshape):
             raise ValueError(f"decay_couplings must have length {n_poles * n_channels}, got {len(self.decay_couplings)}")
 
         if self.background is not None:
-            if len(self.background) != n_poles * n_channels:
-                raise ValueError(f"background must have length {n_poles * n_channels}, got {len(self.background)}")
+            n_pairs = len(_background_pairs(n_channels))
+            if len(self.background) != n_pairs:
+                raise ValueError(
+                    f"background must have length n_channels*(n_channels+1)/2 = {n_pairs} "
+                    f"(upper triangle of b_ij), got {len(self.background)}"
+                )
 
         if self.production_background is not None:
             if len(self.production_background) != n_channels:
@@ -106,9 +120,8 @@ class KMatrixAdvanced(Lineshape):
 
         # Add background terms
         if self.background is not None:
-            for pole_idx in range(n_poles):
-                for channel_idx in range(n_channels):
-                    params.append(f"background_{pole_idx}_{channel_idx}")
+            for i, j in _background_pairs(n_channels):
+                params.append(f"background_{i}_{j}")
 
         # Add production background terms
         if self.production_background is not None:
@@ -169,14 +182,12 @@ class KMatrixAdvanced(Lineshape):
         # Handle background terms
         if self.background is not None:
             background = []
-            for pole_idx in range(n_poles):
-                for channel_idx in range(n_channels):
-                    flat_idx = pole_idx * n_channels + channel_idx
-                    param_name = f"background_{pole_idx}_{channel_idx}"
-                    if param_name in kwargs:
-                        background.append(kwargs[param_name])
-                    else:
-                        background.append(self.background[flat_idx])
+            for flat_idx, (i, j) in enumerate(_background_pairs(n_channels)):
+                param_name = f"background_{i}_{j}"
+                if param_name in kwargs:
+                    background.append(kwargs[param_name])
+                else:
+                    background.append(self.background[flat_idx])
             params["background"] = background
 
         # Handle production background terms
@@ -229,10 +240,8 @@ class KMatrixAdvanced(Lineshape):
 
         # Add background terms
         if self.background is not None:
-            for pole_idx in range(n_poles):
-                for channel_idx in range(n_channels):
-                    flat_idx = pole_idx * n_channels + channel_idx
-                    param_dict[f"background_{pole_idx}_{channel_idx}"] = self.background[flat_idx]
+            for flat_idx, (i, j) in enumerate(_background_pairs(n_channels)):
+                param_dict[f"background_{i}_{j}"] = self.background[flat_idx]
 
         # Add production background terms
         if self.production_background is not None:
@@ -317,7 +326,7 @@ class KMatrixAdvanced(Lineshape):
         """
         Build the K Matrix
 
-        K_ij = sum_R (g_Ri * g_Rj) / (m_R^2 - s)
+        K_ij = sum_R (g_Ri * g_Rj) / (m_R^2 - s) + b_ij   (PDG Eq. 50.38)
         """
         np = config.backend  # Get backend dynamically
         s_len = config.backend.shape(s)
@@ -332,12 +341,6 @@ class KMatrixAdvanced(Lineshape):
 
         # Convert decay couplings to array for vectorized operations
         g_matrix = np.array(params["decay_couplings"]).reshape(n_poles, n_channels)
-        background = params.get("background", None)
-        if background is not None:
-            background = np.array(background).reshape(n_poles, n_channels)
-        else:
-            background = np.zeros((n_poles, n_channels), dtype=complex)
-
         pole_masses = np.array(params["pole_masses"])
 
         # Vectorized computation over all poles and s values
@@ -350,11 +353,23 @@ class KMatrixAdvanced(Lineshape):
 
             # Get decay couplings for this pole
             g_R = g_matrix[R]  # Shape: (n_channels,)
-            background_R = background[R]
             g_R_matrix = g_R[:, None] * g_R[None, :]  # Shape: (n_channels, n_channels)
 
             # target shape: (s_len, n_channels, n_channels)
-            K += g_R_matrix / denominator[:, None, None] + background_R
+            K += g_R_matrix / denominator[:, None, None]
+
+        # Add the s-independent symmetric background b_ij once (PDG Eq. 50.38).
+        # B = sum_k b_k * E_k with constant E_k = e_i e_j^T + e_j e_i^T (single entry on the diagonal),
+        # which keeps the construction differentiable for every backend.
+        background = params.get("background", None)
+        if background is not None:
+            pairs = _background_pairs(n_channels)
+            basis = [[[0.0] * n_channels for _ in range(n_channels)] for _ in pairs]
+            for k, (i, j) in enumerate(pairs):
+                basis[k][i][j] = 1.0
+                basis[k][j][i] = 1.0
+            B = np.tensordot(np.array(background), np.array(basis), axes=1)  # (n_channels, n_channels)
+            K += B[None, :, :]
         return K
 
     def _build_p_vector(
