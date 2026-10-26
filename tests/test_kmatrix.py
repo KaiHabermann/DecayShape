@@ -8,6 +8,7 @@ import pytest
 from decayshape import FixedParam
 from decayshape.kmatrix_advanced import KMatrixAdvanced
 from decayshape.particles import Channel, CommonParticles
+from decayshape.utils import angular_momentum_barrier_factor, blatt_weiskopf_form_factor
 
 
 class TestKMatrixAdvanced:
@@ -308,7 +309,7 @@ class TestKMatrixPhysics:
         pole_masses = [0.6, 0.8, 1.0]
         production_couplings = [1.0, 0.8, 0.6]
         decay_couplings = [1.0, 0.5, 0.3, 0.7, 0.4, 0.9]  # 3 poles × 2 channels = 6
-        background = [0.1, 0.2, 0.15, 0.25, 0.2, 0.3]  # 3 poles × 2 channels = 6
+        background = [0.1, 0.2, 0.3]  # upper triangle of 2×2 b_ij: b_00, b_01, b_11
 
         kmat = KMatrixAdvanced(
             s=sample_s_values,
@@ -323,7 +324,7 @@ class TestKMatrixPhysics:
         assert len(kmat.pole_masses) == 3
         assert len(kmat.channels.value) == 2
         assert kmat.background is not None
-        assert len(kmat.background) == 6
+        assert len(kmat.background) == 3
 
         result = kmat(1, 2)
 
@@ -344,7 +345,7 @@ class TestKMatrixPhysics:
 
         assert not np.allclose(result, result_no_background)
 
-        background_zero = [0.0] * 6  # 3 poles × 2 channels = 6
+        background_zero = [0.0] * 3  # upper triangle of 2×2 b_ij
 
         kmat_zero_background = KMatrixAdvanced(
             s=sample_s_values,
@@ -430,7 +431,7 @@ class TestKMatrixPhysics:
         pole_masses = [0.6, 0.8, 1.0]
         production_couplings = [1.0, 0.8, 0.6]
         decay_couplings = [1.0, 0.5, 0.3, 0.7, 0.4, 0.9]  # 3 poles × 2 channels = 6
-        background = [0.1, 0.2, 0.15, 0.25, 0.2, 0.3]  # 3 poles × 2 channels = 6
+        background = [0.1, 0.2, 0.3]  # upper triangle of 2×2 b_ij: b_00, b_01, b_11
         production_background = [0.05, 0.1]  # 2 channels
 
         kmat = KMatrixAdvanced(
@@ -447,7 +448,7 @@ class TestKMatrixPhysics:
         assert len(kmat.pole_masses) == 3
         assert len(kmat.channels.value) == 2
         assert kmat.background is not None
-        assert len(kmat.background) == 6
+        assert len(kmat.background) == 3
         assert kmat.production_background is not None
         assert len(kmat.production_background) == 2
 
@@ -497,6 +498,97 @@ class TestKMatrixPhysics:
         result_no_backgrounds = kmat_no_backgrounds(1, 2)
 
         assert not np.allclose(result, result_no_backgrounds)
+
+    def test_kmatrix_background_wrong_length(self, sample_s_values):
+        """Background must have length n_channels*(n_channels+1)/2."""
+        pipi_channel = Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS)
+        kk_channel = Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS)
+
+        with pytest.raises(ValueError, match="background must have length"):
+            KMatrixAdvanced(
+                s=sample_s_values,
+                channels=[pipi_channel, kk_channel],
+                pole_masses=[0.6, 0.8, 1.0],
+                decay_couplings=[1.0, 0.5, 0.3, 0.7, 0.4, 0.9],
+                background=[0.1, 0.2, 0.15, 0.25, 0.2, 0.3],  # old n_poles × n_channels layout
+            )
+
+    def _three_channel_two_pole_kmat(self, s):
+        channels = [
+            Channel(particle1=CommonParticles.PI_PLUS, particle2=CommonParticles.PI_MINUS),
+            Channel(particle1=CommonParticles.K_PLUS, particle2=CommonParticles.K_MINUS),
+            Channel(particle1=CommonParticles.ETA, particle2=CommonParticles.ETA),
+        ]
+        return KMatrixAdvanced(
+            s=s,
+            channels=channels,
+            pole_masses=[0.98, 1.5],
+            production_couplings=[1.0, 0.7],
+            decay_couplings=[1.0, 0.5, 0.2, 0.3, 0.8, 0.6],
+            # b_00, b_01, b_02, b_11, b_12, b_22
+            background=[0.1, -0.2, 0.3, 0.4, -0.5, 0.6],
+            production_background=[0.05, 0.1, -0.1],
+            output_channel=0,
+        )
+
+    def test_kmatrix_background_is_symmetric(self, sample_s_values):
+        """With a background, the K-matrix is symmetric (PDG Eq. 50.38)."""
+        kmat = self._three_channel_two_pole_kmat(sample_s_values)
+        params = kmat._get_parameters()
+
+        K = kmat._build_k_matrix(params, sample_s_values, 2, 3)
+
+        assert K.shape == (len(sample_s_values), 3, 3)
+        assert np.allclose(K, np.swapaxes(K, 1, 2))
+        assert kmat.parameter_order[10:16] == [
+            "background_0_0",
+            "background_0_1",
+            "background_0_2",
+            "background_1_1",
+            "background_1_2",
+            "background_2_2",
+        ]
+
+    def test_kmatrix_background_matches_pdg(self):
+        """Lineshape agrees with a hand-built PDG K-matrix: K_ij = sum_R g_Ri g_Rj / (m_R^2 - s) + b_ij."""
+        s = np.linspace(0.1, 3.0, 120)
+        kmat = self._three_channel_two_pole_kmat(s)
+        channels = kmat.channels.value
+        n_channels = 3
+        angular_momentum, spin = 2, 1
+        r = kmat.r
+
+        masses = np.array([0.98, 1.5])
+        g = np.array([[1.0, 0.5, 0.2], [0.3, 0.8, 0.6]])
+        beta = np.array([1.0, 0.7])
+        b = np.array([[0.1, -0.2, 0.3], [-0.2, 0.4, -0.5], [0.3, -0.5, 0.6]])
+        b_prod = np.array([0.05, 0.1, -0.1])
+
+        # PDG Eq. 50.38
+        K_pdg = np.zeros((len(s), n_channels, n_channels), dtype=complex)
+        for R in range(2):
+            K_pdg += np.outer(g[R], g[R])[None, :, :] / (masses[R] ** 2 - s)[:, None, None]
+        K_pdg += b[None, :, :]
+
+        assert np.allclose(kmat._build_k_matrix(kmat._get_parameters(), s, 2, n_channels), K_pdg)
+
+        # PDG Eq. 50.41 P-vector and F = (1 - i K rho)^-1 P
+        P = np.sum(beta[:, None, None] * g[:, :, None] / (masses[:, None, None] ** 2 - s[None, None, :]), axis=0)
+        P = P + b_prod[:, None]
+
+        s_0 = np.mean(masses) ** 2
+        rho = np.stack([ch.phase_space_factor(s) * ch.n(s, s_0, r) ** 2 for ch in channels], axis=0)
+        F = np.empty((n_channels, len(s)), dtype=complex)
+        for k in range(len(s)):
+            M = np.eye(n_channels) - 1j * K_pdg[k] @ np.diag(rho[:, k])
+            F[:, k] = np.linalg.solve(M, P[:, k])
+
+        q = channels[0].momentum(s)
+        q0 = channels[0].momentum(s_0)
+        L = angular_momentum // 2
+        expected = F[0] * angular_momentum_barrier_factor(q, q0, L) * blatt_weiskopf_form_factor(q, r, L)
+
+        assert np.allclose(kmat(angular_momentum, spin), expected)
 
 
 class TestKMatrixMassOverride:
